@@ -6,7 +6,7 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 Conversations, Important/Other tabs, labels, snooze, search, quick replies and undo, all from the keyboard (`?` lists the keys) or the mouse.
 
-> **Early.** It runs on built-in sample mail (no accounts yet), and there's no compose until Mantou has text input. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md).
+> **Early.** It runs on built-in sample mail (no accounts yet), and there's no compose until Mantou has text input. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
 
 ## Run it
 
