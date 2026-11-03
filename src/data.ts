@@ -45,7 +45,14 @@ export interface Message {
   /** You replied and are waiting for an answer, since this date. */
   waitingSince?: Date;
   snoozedUntil?: string;
+  /** Messages with the same thread are one conversation (default: the message's own id). */
+  thread?: number;
 }
+
+/** The conversation a message belongs to. */
+export const threadOf = (m: Message) => m.thread ?? m.id;
+
+export const ME = "Sam Rivera";
 
 const ago = (days: number, hours = 0, minutes = 0) => new Date(NOW.getTime() - ((days * 24 + hours) * 60 + minutes) * 60_000);
 
@@ -58,7 +65,7 @@ export function sampleMessages(): Message[] {
   next = 1;
   return [
     msg({
-      account: "work", from: { name: "Priya Shah", email: "priya@northwind.dev" }, date: ago(0, 0, 18), unread: true, labels: ["design"],
+      account: "work", from: { name: "Priya Shah", email: "priya@northwind.dev" }, date: ago(0, 0, 18), unread: true, labels: ["design"], thread: 101,
       subject: "Onboarding flow: final review before Thursday",
       body: [
         "Hi Sam,",
@@ -103,7 +110,7 @@ export function sampleMessages(): Message[] {
       body: ["We noticed a new sign-in to your Northwind account.", "Device: Safari on macOS\nLocation: Berlin, Germany\nTime: November 2, 08:31", "If this was you, you don't need to do anything. If not, reset your password right away."],
     }),
     msg({
-      account: "work", from: { name: "Mira Kowalski", email: "mira@northwind.dev" }, date: ago(1, 3, 0), waitingSince: ago(3),
+      account: "work", from: { name: "Mira Kowalski", email: "mira@northwind.dev" }, date: ago(1, 3, 0), waitingSince: ago(3), thread: 102,
       subject: "Re: Sync latency investigation",
       body: [
         "I dug into the traces from last week. Most of the p95 comes from the conflict-resolution pass running on the main request path — it re-reads the whole document when only one block changed.",
@@ -127,7 +134,7 @@ export function sampleMessages(): Message[] {
       body: ["Your statement for October 2026 is ready to view in the app.", "Money in: £4,120.00\nMoney out: £3,286.41"],
     }),
     msg({
-      account: "work", from: { name: "Jonas Weber", email: "jonas@acme.io" }, date: ago(2, 4, 0), waitingSince: ago(5), labels: ["finance"],
+      account: "work", from: { name: "Jonas Weber", email: "jonas@acme.io" }, date: ago(2, 4, 0), waitingSince: ago(5), labels: ["finance"], thread: 103,
       subject: "Re: Renewal terms for 2027",
       body: [
         "Thanks for sending the usage numbers. I've shared them with our procurement team.",
@@ -174,8 +181,20 @@ export function sampleMessages(): Message[] {
       subject: "Your books are due back on 7 November",
       body: ["Items due: The Overstory; A Pattern Language.", "Renew online or at any branch."],
     }),
-    // Elsewhere: sent, archived, snoozed.
-    msg({ account: "work", folder: "sent", from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(3), subject: "Sync latency investigation", body: ["Mira — could you look into where the p95 is coming from? Happy to pair on it."] }),
+    // Elsewhere: sent, archived, snoozed. Some are earlier messages of the conversations above.
+    msg({ account: "work", folder: "sent", thread: 102, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(3), subject: "Sync latency investigation", body: ["Mira — could you look into where the p95 is coming from? Happy to pair on it."] }),
+    msg({
+      account: "work", folder: "archive", thread: 103, from: { name: "Jonas Weber", email: "jonas@acme.io" }, date: ago(8, 2), labels: ["finance"],
+      subject: "Renewal terms for 2027",
+      body: ["Hi Sam,", "Our contract is up for renewal in January. Before we talk numbers, could you send over our usage for the last twelve months?", "Best,\nJonas"],
+    }),
+    msg({ account: "work", folder: "sent", thread: 103, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(5), subject: "Re: Renewal terms for 2027", body: ["Hi Jonas, usage for the last twelve months is attached: 212 active seats on average, peaking at 240 in September.", "Happy to walk through it on a call."] }),
+    msg({
+      account: "work", folder: "archive", thread: 101, from: { name: "Priya Shah", email: "priya@northwind.dev" }, date: ago(4, 6), labels: ["design"],
+      subject: "Onboarding flow: first pass",
+      body: ["First pass at the new onboarding is in the shared file. Rough around the edges, but the structure is there.", "Main question for now: should the workspace picker come before or after sign-in?"],
+    }),
+    msg({ account: "work", folder: "sent", thread: 101, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(4, 3), subject: "Re: Onboarding flow: first pass", body: ["After, I think. Nobody should see an empty picker on day one."] }),
     msg({ account: "work", folder: "archive", from: { name: "Daniel Okafor", email: "daniel@northwind.dev" }, date: ago(12), subject: "Q3 retro notes", body: ["Notes from the retro are in the wiki."] }),
     msg({ account: "personal", folder: "snoozed", snoozedUntil: "Tomorrow, 08:00", from: { name: "Alex Kim", email: "alex.kim@hey.com" }, date: ago(1, 9), subject: "Plant-sitting next weekend?", body: ["Could you water the plants while we're away? Keys are under the blue pot."] }),
   ];

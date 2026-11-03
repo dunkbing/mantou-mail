@@ -4,7 +4,9 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 ![Mantou Mail](docs/screenshot.png)
 
-> **Early.** It runs on built-in sample mail (no accounts yet), and there's no compose or search until Mantou has text input.
+Conversations, Important/Other tabs, labels, snooze, search, quick replies and undo, all from the keyboard (`?` lists the keys) or the mouse.
+
+> **Early.** It runs on built-in sample mail (no accounts yet), and there's no compose until Mantou has text input. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md).
 
 ## Run it
 
@@ -24,7 +26,15 @@ bun run dev
 
 ## Keys
 
-`j`/`k` move · `e` archive · `#` delete · `s` star · `u` unread · `r` quick reply (then `1`–`3`) · `z` undo · `1`/`2` Important/Other
+| Key | | Key | |
+|---|---|---|---|
+| `j` / `k` | older / newer message | `e` | archive |
+| `1` / `2` | Important / Other | `i` | move to Inbox (from Archive, Snoozed, Trash) |
+| `/` | search (Enter keeps the results, Esc goes back) | `#` | delete (in Trash: for good) |
+| `?` | keyboard shortcuts | `h` | snooze (then `1`–`4`) |
+| `Esc` | close a panel, leave search | `l` | labels (then `1`–`4` toggle) |
+| `z` | undo | `r` | quick reply (then `1`–`3`) |
+| `s` | star | `u` | mark read / unread |
 
 ## Test
 
