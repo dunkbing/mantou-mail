@@ -6,11 +6,14 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 
 | Path | What |
 |---|---|
-| `src/data.ts` | Sample mail (accounts, labels, messages and the conversations they belong to), relative to a fixed "now" so tests are deterministic |
-| `src/state.ts` | Solid signals and actions (select, move, archive, move to inbox, delete, snooze, labels, star, unread, search, drafts, compose and send, undo); parsing To lines |
-| `src/App.tsx` | The UI: sidebar (Compose, the search `<Input>`, mailboxes), toolbar and tabs, message list, reader (the whole conversation) and its panels (reply composer, snooze, labels), the new-message composer, status bar, shortcuts overlay; keyboard handling |
-| `src/main.tsx` | Entry: `run(() => <App />)` |
-| `tests/` | Bun tests on a headless instance of Mantou's real core |
+| `src/data.ts` | The data types (`Message`, `Account`), the clock (`now()`: fixed in tests, real in the app), and sample mail for when no account is set up |
+| `src/state.ts` | Solid signals and actions (select, move, archive, move to inbox, delete, snooze, labels, star, unread, search, drafts, compose and send, undo); parsing To lines. Knows nothing of views or servers: `onChange(prev, next)` reports the user's changes, `receive()` takes the servers' messages |
+| `src/App.tsx` | The app: layout and keyboard handling |
+| `src/ui/` | The UI, a file per part: `Sidebar`, `Toolbar`, `MessageList`, `Reader` (conversation, reply/snooze/label panel), `Compose` (reply and new-message composers), `Accounts` (the Accounts dialog), `StatusBar`, `Shortcuts`; `common` (avatars, chips, buttons), `scroll` (scroll areas), `theme` (colours, shared styles) |
+| `src/mail/` | Real accounts: `remote` (accounts, passwords, the bridge to the state), `imap` (one account's sync over IMAP, with imapflow), `store` (the local copy, SQLite), `parse` (raw mail to `Message`), `providers` (settings guessed from an address), `secrets` (the OS keychain), `paths` (the data folder) |
+| `src/main.tsx` | Entry: the store, the accounts, then `run(() => <App />)` |
+| `tests/` | Bun tests on a headless instance of Mantou's real core; real accounts against an IMAP server in the test process (`tests/server.ts`, hoodiecrow) |
+| `scripts/` | `demo-server`: an IMAP server with the sample mail, to try real accounts locally |
 | `docs/upstream.md` | What the app needs from Mantou: the issues filed (and drafts of any not yet filed), with the workaround in use |
 
 ## Commands
@@ -18,6 +21,7 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 ```bash
 bun install          # mantou-ui from npm, pinned in package.json / bun.lock, with a prebuilt native core
 bun run dev          # the app in a window (on headless Linux: xvfb-run -a bun run dev)
+bun run demo-server  # an IMAP server on 127.0.0.1:1143 with the sample mail (testuser / testpass)
 bun test             # headless tests (captures need a GPU adapter; Mesa's lavapipe is fine)
 bun run typecheck    # bun check
 ```
@@ -29,7 +33,9 @@ bun run typecheck    # bun check
 - JSX is compiled by Mantou's plugin: `tsconfig.json` has `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; `bunfig.toml` preloads `mantou-ui/preload` for tests; `mantou run` registers it for the app.
 - Read Mantou's docs before building something: https://mantou.dunkbing.dev (LLM-friendly: `/llms.txt`, `/llms-full.txt`, any page as `.md`). Its `AGENTS.md` has the framework's rules.
 
-What Mantou can do today: `<View>` and `<Text>`, flexbox layout, text with `maxLines` ellipsis, rounded corners and borders, `overflow: "hidden"` clipping, `onPress`, `onWheel`, `onKey`, `node.measure()`, `position: "absolute"` (overlays, scrollbar thumbs), `<Input>` (single-line and multiline, edited in the core; keys it uses don't reach `onKey`, though Esc, and Up/Down from a single-line one, still do; Ctrl/⌘+Enter submits a multiline one; tests type with `h.type`, check `h.focused()`, and send shortcuts with `h.key(k, { primary: true })`), shared styles (`defineStyle`), Solid's `For`/`Index`/`Show`/`Switch`. Not yet: resize events (dunkbing/mantou#3), images, shadows, core-driven scrolling (the app scrolls with the wheel and negative margins), hover, focus for anything but inputs, drag and drop, menus, multiple windows, accessibility, real mail accounts (would need networking and storage on top of Bun).
+What Mantou can do today: `<View>` and `<Text>`, flexbox layout, text with `maxLines` ellipsis, rounded corners and borders, `overflow: "hidden"` clipping, `onPress`, `onWheel`, `onKey`, `node.measure()`, `position: "absolute"` (overlays, scrollbar thumbs), `<Input>` (single-line and multiline, edited in the core; keys it uses don't reach `onKey`, though Esc, and Up/Down from a single-line one, still do; Ctrl/⌘+Enter submits a multiline one; tests type with `h.type`, check `h.focused()`, and send shortcuts with `h.key(k, { primary: true })`), shared styles (`defineStyle`), Solid's `For`/`Index`/`Show`/`Switch`. Not yet (in 0.1.1): resize events (dunkbing/mantou#3, in 0.1.2), images, shadows, core-driven scrolling (dunkbing/mantou#5; the app scrolls with the wheel and negative margins), focus scopes for dialogs (#6), password inputs (#7), hover, focus for anything but inputs, drag and drop, menus, multiple windows, accessibility.
+
+Networking and storage are Bun's, not Mantou's: IMAP with imapflow (it runs in the app's Worker), the local copy with `bun:sqlite`, passwords with `Bun.secrets`.
 
 Layout is CSS flexbox, with its sharp edges: `flexShrink` defaults to 1 (fixed-size parts need `flexShrink: 0`), and flex items are at least as tall as their content unless they clip (scroll containers' ancestors need `minHeight: 0`, and a region whose height should come from the window rather than from its scrolled content needs `flexBasis: 0`). An absolutely positioned view that uses `right` or `bottom` needs a parent with an explicit `position: "relative"` for now (dunkbing/mantou#1).
 
@@ -46,4 +52,4 @@ When Mantou ships a fix: `bun add mantou-ui@<version>` (exact version), run the 
 
 ## Before you finish
 
-Run `bun run typecheck && bun test`. If you changed what the app looks like, check it with a headless capture or in a window, and update `docs/screenshot.png` when the change is visible.
+Run `bun run typecheck && bun test`. Real-account tests wait for conditions (`until` in `tests/server.ts`), never for a time. If you changed what the app looks like, check it with a headless capture or in a window, and update `docs/screenshot.png` when the change is visible.

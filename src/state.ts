@@ -1,7 +1,7 @@
 // Mantou Mail's state: Solid signals and the actions the UI and the keyboard
 // share. Nothing here knows about views.
 import { batch, createMemo, createSignal } from "mantou-ui";
-import { ACCOUNTS, LABELS, ME, NOW, sampleMessages, threadOf, type Contact, type Folder, type Message } from "./data";
+import { LABELS, SAMPLE_ACCOUNTS, now, sampleMessages, threadOf, type Account, type Contact, type Folder, type Message } from "./data";
 
 export type Mailbox =
   | { kind: "all" }
@@ -17,10 +17,10 @@ export function sameMailbox(a: Mailbox, b: Mailbox): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function mailboxName(m: Mailbox): string {
+export function mailboxName(m: Mailbox, accounts: Account[] = SAMPLE_ACCOUNTS): string {
   switch (m.kind) {
     case "all": return "All inboxes";
-    case "account": return ACCOUNTS.find((a) => a.id === m.id)?.name ?? m.id;
+    case "account": return accounts.find((a) => a.id === m.id)?.name ?? m.id;
     case "folder": return m.folder[0].toUpperCase() + m.folder.slice(1);
     case "starred": return "Starred";
     case "label": return LABELS.find((l) => l.id === m.id)?.name ?? m.id;
@@ -103,8 +103,28 @@ export const paragraphs = (text: string) => text.split(/\n\s*\n/).map((p) => p.t
 
 const reSubject = (subject: string) => (subject.startsWith("Re: ") ? subject : `Re: ${subject}`);
 
-export function createMail(initial: Message[] = sampleMessages()) {
-  const [messages, setMessages] = createSignal(initial);
+export interface MailOptions {
+  /** The accounts the messages belong to (default: the sample ones). */
+  accounts?: Account[];
+  /**
+   * Called after every change the user makes (not after `receive`), with the
+   * messages before and after: how changes reach the server.
+   */
+  onChange?: (prev: Message[], next: Message[]) => void;
+}
+
+export function createMail(initial: Message[] = sampleMessages(), options: MailOptions = {}) {
+  const [messages, setMessagesRaw] = createSignal(initial);
+  const setMessages = (next: Message[]) => {
+    const prev = messages();
+    setMessagesRaw(next);
+    options.onChange?.(prev, next);
+  };
+  const [accounts, setAccountsRaw] = createSignal<Account[]>(options.accounts ?? SAMPLE_ACCOUNTS);
+  const accountOf = (id: string) => accounts().find((a) => a.id === id) ?? accounts()[0];
+  /** Mail from one of your accounts. */
+  const isMine = (c: Contact) => accounts().some((a) => a.email.toLowerCase() === c.email.toLowerCase());
+  const fromAccount = (id: string): Contact => ({ name: accountOf(id).sender, email: accountOf(id).email });
   const [mailbox, setMailbox] = createSignal<Mailbox>({ kind: "all" });
   const [tab, setTab] = createSignal<Tab>("important");
   const [selectedId, setSelectedId] = createSignal<number | null>(null);
@@ -122,7 +142,7 @@ export function createMail(initial: Message[] = sampleMessages()) {
   const [composing, setComposing] = createSignal(false);
   /** Why the draft couldn't be sent (cleared by the next edit). */
   const [problem, setProblem] = createSignal("");
-  const [draft, setDraft] = createSignal<Draft>({ kind: "new", id: null, account: ACCOUNTS[0].id, to: "", subject: "", body: "" });
+  const [draft, setDraft] = createSignal<Draft>({ kind: "new", id: null, account: accounts()[0]?.id ?? "", to: "", subject: "", body: "" });
   /** Where Escape goes back to from a search. */
   let beforeSearch: Mailbox = { kind: "all" };
   const history: { messages: Message[]; selectedId: number | null }[] = [];
@@ -137,7 +157,7 @@ export function createMail(initial: Message[] = sampleMessages()) {
 
   /** Messages per conversation, trash and drafts left out. */
   const threadSizes = createMemo(() => {
-    const sizes = new Map<number, number>();
+    const sizes = new Map<number | string, number>();
     for (const m of messages()) if (m.folder !== "trash" && m.folder !== "drafts") sizes.set(threadOf(m), (sizes.get(threadOf(m)) ?? 0) + 1);
     return sizes;
   });
@@ -157,7 +177,7 @@ export function createMail(initial: Message[] = sampleMessages()) {
   /** Everyone who has written to you, for names in the To line. */
   const contacts = createMemo(() => {
     const seen = new Map<string, Contact>();
-    for (const m of messages()) for (const c of [m.from, ...(m.to ?? [])]) if (c.name !== ME) seen.set(c.email.toLowerCase(), c);
+    for (const m of messages()) for (const c of [m.from, ...(m.to ?? [])]) if (!isMine(c) && c.email) seen.set(c.email.toLowerCase(), c);
     return [...seen.values()];
   });
   const nextId = () => Math.max(0, ...messages().map((m) => m.id)) + 1;
@@ -189,12 +209,11 @@ export function createMail(initial: Message[] = sampleMessages()) {
       if (d.id !== null) setMessages(messages().filter((m) => m.id !== d.id));
       return false;
     }
-    const account = ACCOUNTS.find((a) => a.id === d.account)!;
     const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
     const id = d.id ?? nextId();
     const saved: Message = {
-      id, account: d.account, folder: "drafts", from: { name: ME, email: account.email },
-      to: parseRecipients(d.to, contacts()).ok, subject: d.subject, body: paragraphs(d.body), date: NOW,
+      id, account: d.account, folder: "drafts", from: fromAccount(d.account),
+      to: parseRecipients(d.to, contacts()).ok, subject: d.subject, body: paragraphs(d.body), date: now(),
       unread: false, starred: false, important: true, labels: [],
       thread: original ? threadOf(original) : undefined, draft: { to: d.to, replyTo: d.replyTo },
     };
@@ -217,7 +236,7 @@ export function createMail(initial: Message[] = sampleMessages()) {
       closePanel();
       setDraft(from?.folder === "drafts" ? draftFrom(from) : {
         kind: "new", id: null, to: "", subject: "", body: "",
-        account: box.kind === "account" ? box.id : (selected()?.account ?? ACCOUNTS[0].id),
+        account: box.kind === "account" ? box.id : (selected()?.account ?? accounts()[0]?.id ?? ""),
       });
       setProblem("");
       setComposing(true);
@@ -272,6 +291,32 @@ export function createMail(initial: Message[] = sampleMessages()) {
 
   return {
     messages, list, selected, mailbox, tab, panel, status, searching, conversation, composing, draft, contacts, problem, undoable,
+    accounts, accountOf, isMine, nextId,
+    mailboxName: (box: Mailbox) => mailboxName(box, accounts()),
+    /** Shows a status line that isn't an undo step (sync progress, errors). */
+    note: (text: string) => setStatus(text),
+    /**
+     * Messages of an account as the server has them now. They replace that
+     * account's server messages; this isn't an undo step and isn't sent back.
+     */
+    receive(account: string, list: Message[]) {
+      setMessagesRaw([...messages().filter((m) => m.account !== account || !m.remote), ...list]);
+    },
+    /**
+     * Sets the accounts, and the messages to show for them (default: the ones
+     * already here). Not an undo step; switching from sample mail to real
+     * accounts and back goes through here.
+     */
+    setAccounts(list: Account[], with_?: Message[]) {
+      const ids = new Set(list.map((a) => a.id));
+      batch(() => {
+        setAccountsRaw(list);
+        setMessagesRaw((with_ ?? messages()).filter((m) => ids.has(m.account)));
+        history.length = 0;
+        if (mailbox().kind === "account" && !ids.has((mailbox() as { id: string }).id)) open({ kind: "all" });
+        if (!ids.has(draft().account)) setDraft({ ...draft(), account: list[0]?.id ?? "" });
+      });
+    },
     unread, count, unreadInTab, threadSize, select, open, closePanel,
     replying: () => panel() === "reply",
 
@@ -335,7 +380,7 @@ export function createMail(initial: Message[] = sampleMessages()) {
         closePanel();
         setDraft(saved ? draftFrom(saved) : {
           kind: "reply", id: null, account: s.account, replyTo: s.id,
-          to: formatContacts([s.from.name === ME ? (s.to?.[0] ?? s.from) : s.from]), subject: reSubject(s.subject), body: "",
+          to: formatContacts([isMine(s.from) ? (s.to?.[0] ?? s.from) : s.from]), subject: reSubject(s.subject), body: "",
         });
         setProblem("");
         setPanel("reply");
@@ -380,17 +425,17 @@ export function createMail(initial: Message[] = sampleMessages()) {
       if (bad.length) return setProblem(`“${bad[0]}” isn't an email address`), false;
       if (!ok.length) return setProblem("Add a recipient first"), false;
       if (!d.body.trim() && !d.subject.trim()) return setProblem("Write something first"), false;
-      const account = ACCOUNTS.find((a) => a.id === d.account)!;
+      if (!accountOf(d.account)?.sample) return setProblem("Sending from real accounts comes with SMTP, in phase 2; Esc keeps this in Drafts"), false;
       const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
       const sent: Message = {
-        id: nextId(), account: d.account, folder: "sent", from: { name: ME, email: account.email }, to: ok,
-        subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: NOW,
+        id: nextId(), account: d.account, folder: "sent", from: fromAccount(d.account), to: ok,
+        subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: now(),
         unread: false, starred: false, important: true, labels: [], thread: original ? threadOf(original) : undefined,
       };
       batch(() => {
         change((ms) => {
           let out = ms.filter((m) => m.id !== d.id);
-          if (original) out = patch(original.id, { waitingSince: NOW })(out);
+          if (original) out = patch(original.id, { waitingSince: now() })(out);
           return [...out, sent];
         }, `Sent to ${ok.map((c) => c.name).join(", ")}`);
         setDraft({ ...d, id: null, to: "", subject: "", body: "" });

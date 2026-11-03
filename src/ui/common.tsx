@@ -1,0 +1,79 @@
+// Small pieces used all over: avatars, chips, key hints, buttons.
+import { For, Text, View, createSignal, onCleanup } from "mantou-ui";
+
+/**
+ * The open dialog's "focus my first field". Workaround for dunkbing/mantou#6
+ * (focus scopes): Tab leaves a dialog for the inputs behind it, so an input
+ * behind one that gets the focus hands it back with this.
+ */
+const [dialogFocus, setDialogFocus] = createSignal<(() => void) | null>(null);
+export { dialogFocus };
+/** Registers the dialog being created (until it's disposed). */
+export function useDialogFocus(focus: () => void) {
+  setDialogFocus(() => focus);
+  onCleanup(() => setDialogFocus(null));
+}
+import { LABELS, type Message } from "../data";
+import { SEND_KEYS, C, AVATAR_COLORS } from "./theme";
+
+export function initials(name: string) {
+  const parts = name.split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+export function avatarColor(name: string) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+export function Avatar(props: { name: string; size: number }) {
+  return (
+    <View style={{ width: props.size, height: props.size, flexShrink: 0, borderRadius: props.size / 2, backgroundColor: avatarColor(props.name), justifyContent: "center" }}>
+      <Text style={{ color: "#ffffff", fontSize: props.size * 0.38, fontWeight: 600, textAlign: "center" }}>{initials(props.name)}</Text>
+    </View>
+  );
+}
+
+export function Chip(props: { text: string; color: string; background: string }) {
+  return (
+    <View style={{ height: 20, flexShrink: 0, paddingLeft: 8, paddingRight: 8, borderRadius: 10, backgroundColor: props.background, justifyContent: "center" }}>
+      <Text style={{ fontSize: 11, fontWeight: 500, color: props.color, maxLines: 1 }}>{props.text}</Text>
+    </View>
+  );
+}
+
+export function LabelChips(props: { message: Message }) {
+  return (
+    <For each={props.message.labels}>
+      {(id) => {
+        const l = LABELS.find((x) => x.id === id)!;
+        return <Chip text={l.name} color={l.color} background={`${l.color}1f`} />;
+      }}
+    </For>
+  );
+}
+
+export function Kbd(props: { text: string }) {
+  return (
+    <View style={{ height: 18, minWidth: 18, flexShrink: 0, paddingLeft: 5, paddingRight: 5, borderRadius: 4, borderWidth: 1, borderColor: C.line, backgroundColor: C.faint, justifyContent: "center" }}>
+      <Text style={{ fontSize: 10, fontWeight: 600, color: C.secondary, textAlign: "center" }}>{props.text}</Text>
+    </View>
+  );
+}
+
+export function SendButton(props: { onPress: () => void; label?: string; keys?: string }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 32, flexShrink: 0, paddingLeft: 14, paddingRight: 12, borderRadius: 7, backgroundColor: C.accent }} onPress={props.onPress}>
+      <Text style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>{props.label ?? "Send"}</Text>
+      <Text style={{ fontSize: 11, fontWeight: 600, color: "#c7d2fe" }}>{props.keys ?? SEND_KEYS}</Text>
+    </View>
+  );
+}
+
+export function TextButton(props: { label: string; onPress: () => void }) {
+  return (
+    <View style={{ height: 32, flexShrink: 0, paddingLeft: 10, paddingRight: 10, justifyContent: "center", borderRadius: 7 }} onPress={props.onPress}>
+      <Text style={{ fontSize: 13, fontWeight: 500, color: C.secondary }}>{props.label}</Text>
+    </View>
+  );
+}

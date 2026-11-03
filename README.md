@@ -4,9 +4,9 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 ![Mantou Mail](docs/screenshot.png)
 
-Conversations, Important/Other tabs, labels, snooze, search, replies and new messages with drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
+IMAP accounts (Gmail, Outlook, iCloud, Fastmail, Yahoo, any IMAP server) synced to a local copy, conversations, Important/Other tabs, labels, snooze, search, replies and new messages with drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
 
-> **Early.** It runs on built-in sample mail (no accounts yet), and sending only files the message in Sent. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
+> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each), and reading, starring, archiving, deleting and moving go back to the server; sending (SMTP) comes next, so mail written from a real account stays in Drafts for now. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
 
 ## Run it
 
@@ -18,6 +18,14 @@ bun install
 
 ```bash
 bun run dev
+```
+
+**Add an account** with "Add your account" in the sidebar: email, password (many providers need an app password for IMAP; the dialog says where to make one), and the IMAP server, guessed from the address. The password goes to the system keychain (Keychain, Secret Service, Credential Manager); without one, it's kept until you quit. Mail is kept in the app's data folder (`~/.local/share/mantou-mail`, `~/Library/Application Support/Mantou Mail`, `%APPDATA%\Mantou Mail`; `MANTOU_MAIL_HOME` to use another).
+
+**To try it without a real account**, run an IMAP server on this machine with the sample mail, and add `sam@northwind.dev` with password `testpass`, server `127.0.0.1`, port `1143`, username `testuser`:
+
+```bash
+bun run demo-server
 ```
 
 ## Keys
@@ -40,4 +48,4 @@ bun run dev
 bun test
 ```
 
-The tests run the app on a headless instance of Mantou's real core: layout, presses, keys, the wheel and captured pixels, with no window.
+The tests run the app on a headless instance of Mantou's real core: layout, presses, keys, the wheel and captured pixels, with no window. Real accounts are tested against an IMAP server in the test process ([hoodiecrow](https://github.com/postalsys/hoodiecrow-imap)): the first sync, changes reaching the server, new mail over IDLE, and the saved copy.

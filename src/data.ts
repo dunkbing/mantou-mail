@@ -1,7 +1,19 @@
-// Sample mail for Mantou Mail. Times are relative to a fixed "now", so the
-// app (and its tests) show the same thing every run.
+// The app's data types, and sample mail for when no account is set up. Times
+// are relative to a fixed "now" in tests, so they show the same thing every
+// run; the app runs on the real clock (useRealTime).
 
-export const NOW = new Date("2026-11-03T09:30:00");
+/** Tuesday 3 November 2026, 09:30: "now" in tests, and what sample mail is relative to. */
+export let NOW = new Date("2026-11-03T09:30:00");
+let realTime = false;
+
+/** The current time: the real one in the app, NOW in tests. */
+export const now = () => (realTime ? new Date() : NOW);
+
+/** Runs on the real clock from now on (sample mail is then relative to the app's start). */
+export function useRealTime() {
+  realTime = true;
+  NOW = new Date();
+}
 
 export type Folder = "inbox" | "archive" | "trash" | "sent" | "snoozed" | "drafts";
 
@@ -20,13 +32,19 @@ export const LABELS: Label[] = [
 
 export interface Account {
   id: string;
+  /** What the sidebar calls it. */
   name: string;
   email: string;
+  /** The name mail from it is signed with. */
+  sender: string;
+  /** Sample mail rather than a real account. */
+  sample?: boolean;
 }
 
-export const ACCOUNTS: Account[] = [
-  { id: "work", name: "Work", email: "sam@northwind.dev" },
-  { id: "personal", name: "Personal", email: "sam.rivera@fastmail.com" },
+/** The sample accounts, shown until a real one is added. */
+export const SAMPLE_ACCOUNTS: Account[] = [
+  { id: "work", name: "Work", email: "sam@northwind.dev", sender: "Sam Rivera", sample: true },
+  { id: "personal", name: "Personal", email: "sam.rivera@fastmail.com", sender: "Sam Rivera", sample: true },
 ];
 
 export interface Contact {
@@ -55,13 +73,15 @@ export interface Message {
   /** A draft's fields as typed (the To line may not parse yet), and the message it replies to. */
   draft?: { to: string; replyTo?: number };
   /** Messages with the same thread are one conversation (default: the message's own id). */
-  thread?: number;
+  thread?: number | string;
+  /** Where it is on the server, for mail from a real account. */
+  remote?: { path: string; uid: number };
+  /** The Message-ID header, without the angle brackets. */
+  messageId?: string;
 }
 
 /** The conversation a message belongs to. */
-export const threadOf = (m: Message) => m.thread ?? m.id;
-
-export const ME = "Sam Rivera";
+export const threadOf = (m: Message): number | string => m.thread ?? m.id;
 
 const ago = (days: number, hours = 0, minutes = 0) => new Date(NOW.getTime() - ((days * 24 + hours) * 60 + minutes) * 60_000);
 
@@ -212,10 +232,11 @@ export function sampleMessages(): Message[] {
 /** "09:12" today, "Yesterday", a weekday within a week, else "Oct 28". */
 export function shortDate(d: Date): string {
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const days = Math.round((day(NOW) - day(d)) / 86_400_000);
+  const days = Math.round((day(now()) - day(d)) / 86_400_000);
   if (days === 0) return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   if (days === 1) return "Yesterday";
   if (days < 7) return d.toLocaleDateString("en-GB", { weekday: "short" });
+  if (d.getFullYear() !== now().getFullYear()) return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
 }
 
@@ -225,5 +246,5 @@ export function longDate(d: Date): string {
 }
 
 export function daysSince(d: Date): number {
-  return Math.max(1, Math.round((NOW.getTime() - d.getTime()) / 86_400_000));
+  return Math.max(1, Math.round((now().getTime() - d.getTime()) / 86_400_000));
 }

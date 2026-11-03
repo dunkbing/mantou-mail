@@ -209,6 +209,8 @@ Networking, storage and the keychain are Bun's job, not Mantou's: TLS sockets (`
 
 ## Phases
 
+Status, 3 November 2026: phase 1 has started. IMAP accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 of each) into SQLite, with new mail over IDLE, and the app's changes go back to the server. Still to do in phase 1: full-text search in SQLite (search covers the local copy today), HTML mail as rich text (it's shown as text), Gmail and Microsoft Graph APIs (IMAP only for now), older mail beyond the window, and a sync worker of its own (sync runs in the app's Worker for now). The composer from phase 2 exists; SMTP doesn't.
+
 ```mermaid
 flowchart LR
   P0["0 · Prototype<br/>(today)<br/>sample mail, triage UI,<br/>conversations, search"]

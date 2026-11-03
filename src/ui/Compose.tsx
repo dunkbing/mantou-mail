@@ -1,0 +1,133 @@
+// Writing mail: the reply composer under the reader, and the new-message composer.
+import { For, Input, Show, Text, View, defineStyle, type Node } from "mantou-ui";
+import { QUICK_REPLIES, type Mail } from "../state";
+import { C, hline, small, field } from "./theme";
+import { Kbd, SendButton, TextButton, useDialogFocus } from "./common";
+
+/** Why the draft can't be sent yet, beside the Send button. */
+export function Problem(props: { mail: Mail }) {
+  return (
+    <Show when={props.mail.problem()}>
+      <Text style={{ flexShrink: 1, fontSize: 12, color: "#b91c1c", maxLines: 1 }}>{props.mail.problem()}</Text>
+    </Show>
+  );
+}
+
+/** A reply, written under the conversation. Quick replies are starting points. */
+export function ReplyComposer(props: { mail: Mail }) {
+  const m = props.mail;
+  let body: Node | undefined;
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        <For each={QUICK_REPLIES}>
+          {(text) => (
+            <View style={{ height: 28, paddingLeft: 12, paddingRight: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", justifyContent: "center" }} onPress={() => {
+                m.insertReply(text);
+                body?.focus(); // the press took the focus; give it back to keep typing
+              }}>
+              <Text style={{ fontSize: 12, color: C.text }}>{text}</Text>
+            </View>
+          )}
+        </For>
+      </View>
+      <Input
+        ref={(n) => (body = n)}
+        multiline
+        autoFocus
+        value={m.draft().body}
+        placeholder="Write a reply"
+        onChange={(body) => m.editDraft({ body })}
+        onSubmit={() => m.send()}
+        style={[field, { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", lineHeight: 1.5 }]}
+      />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <SendButton onPress={() => m.send()} />
+        <TextButton label="Discard" onPress={m.discard} />
+        <Problem mail={m} />
+      </View>
+    </View>
+  );
+}
+
+/** A new message (or a saved draft), over the app: From, To, Subject, the text. */
+export function Composer(props: { mail: Mail }) {
+  const m = props.mail;
+  // Decided once, when the composer opens: a draft with recipients starts in
+  // the text. Workaround for dunkbing/mantou#4: an autoFocus that turns true
+  // later focuses the input then, so it mustn't follow the To line.
+  const startInBody = !!m.draft().to;
+  let firstField: Node | undefined;
+  useDialogFocus(() => firstField?.focus());
+  let subject: Node | undefined;
+  let body: Node | undefined;
+  const label = (text: string) => <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{text}</Text>;
+  const row = defineStyle({ flexDirection: "row", alignItems: "center", minHeight: 44, paddingLeft: 20, paddingRight: 20 });
+  return (
+    <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={m.closeCompose}>
+      <View style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 20, paddingRight: 16, backgroundColor: "#fafafa" }}>
+          <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>{m.draft().id === null ? "New message" : "Draft"}</Text>
+          <Text style={[small, { paddingRight: 8 }]}>Esc keeps it in Drafts</Text>
+          <Kbd text="Esc" />
+        </View>
+        <View style={hline} />
+        <View style={[row, { gap: 6 }]}>
+          {label("From")}
+          <For each={m.accounts()}>
+            {(a) => (
+              <View
+                style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 14, borderWidth: 1, justifyContent: "center", borderColor: m.draft().account === a.id ? C.accent : C.line, backgroundColor: m.draft().account === a.id ? C.accentSoft : "#ffffff" }}
+                onPress={() => m.editDraft({ account: a.id })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: 500, color: m.draft().account === a.id ? C.accent : C.secondary }}>{`${a.name} · ${a.email}`}</Text>
+              </View>
+            )}
+          </For>
+        </View>
+        <View style={hline} />
+        <View style={row}>
+          {label("To")}
+          <Input
+            ref={(n) => (firstField = n)}
+            autoFocus={!startInBody}
+            value={m.draft().to}
+            placeholder="Name <email>, separated by commas"
+            onChange={(to) => m.editDraft({ to })}
+            onSubmit={() => subject?.focus()}
+            style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+          />
+        </View>
+        <View style={hline} />
+        <View style={row}>
+          {label("Subject")}
+          <Input
+            ref={(n) => (subject = n)}
+            value={m.draft().subject}
+            placeholder="What it's about"
+            onChange={(subject) => m.editDraft({ subject })}
+            onSubmit={() => body?.focus()}
+            style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+          />
+        </View>
+        <View style={hline} />
+        <Input
+          ref={(n) => (body = n)}
+          multiline
+          autoFocus={startInBody}
+          value={m.draft().body}
+          placeholder="Write your message"
+          onChange={(body) => m.editDraft({ body })}
+          onSubmit={() => m.send()}
+          style={[field, { height: 280, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20, lineHeight: 1.5 }]}
+        />
+        <View style={hline} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 56, paddingLeft: 16, paddingRight: 16 }}>
+          <SendButton onPress={() => m.send()} />
+          <TextButton label="Discard" onPress={m.discard} />
+          <Problem mail={m} />
+        </View>
+      </View>
+    </View>
+  );
+}

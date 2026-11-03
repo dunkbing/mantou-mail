@@ -11,5 +11,5 @@
     "jsx": "preserve",
     "jsxImportSource": "mantou-ui"
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "scripts"]
 }
