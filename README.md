@@ -4,9 +4,9 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 ![Mantou Mail](docs/screenshot.png)
 
-Conversations, Important/Other tabs, labels, snooze, search, quick replies and undo, all from the keyboard (`?` lists the keys) or the mouse.
+Conversations, Important/Other tabs, labels, snooze, search, replies and new messages with drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
 
-> **Early.** It runs on built-in sample mail (no accounts yet), and there's no compose yet: Mantou just gained a text input, and the app hasn't moved to it. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
+> **Early.** It runs on built-in sample mail (no accounts yet), and sending only files the message in Sent. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
 
 ## Run it
 
@@ -27,9 +27,11 @@ bun run dev
 | `j` / `k` | older / newer message | `e` | archive |
 | `1` / `2` | Important / Other | `i` | move to Inbox (from Archive, Snoozed, Trash) |
 | `/` | search (Enter keeps the results, Esc goes back) | `#` | delete (in Trash: for good) |
+| `c` | compose (`Enter` in To and Subject moves on) | `r` | reply (Esc keeps a draft) |
+| `Ctrl`/`⌘`+`Enter` | send | `Enter` | open a draft (in Drafts) |
 | `?` | keyboard shortcuts | `h` | snooze (then `1`–`4`) |
 | `Esc` | close a panel, leave search | `l` | labels (then `1`–`4` toggle) |
-| `z` | undo | `r` | quick reply (then `1`–`3`) |
+| `z` | undo (sending too) | | |
 | `s` | star | `u` | mark read / unread |
 
 ## Test

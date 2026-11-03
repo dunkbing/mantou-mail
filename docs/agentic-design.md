@@ -180,7 +180,7 @@ Some of these needs are already in `docs/upstream.md`. The rest are new feature 
 
 | Need | Priority | Unblocks | Today |
 | --- | --- | --- | --- |
-| Text input: single-line, then multi-line with selection, IME and clipboard | Available in mantou-ui 0.1.1 | Compose, real replies, agent chat, rule editor, search | Search still typed through `onKey`; move it to `<Input>` |
+| Text input: single-line, then multi-line with selection, IME and clipboard | Available in mantou-ui 0.1.1 | Compose, real replies, agent chat, rule editor, search | Search, the reply composer and the new-message composer use `<Input>` |
 | Core-driven scrolling and a virtualised list | Blocking (phase 1) | Mailboxes with 50,000 messages, long threads | Wheel plus negative margins; every row is a node |
 | Rich text: spans, links, inline styles | Blocking (phase 1) | Showing HTML mail (converted to a safe subset), clickable links | Plain text paragraphs |
 | Images | High | Inline images, avatars, logos | Initials in coloured circles |

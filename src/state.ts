@@ -1,7 +1,7 @@
 // Mantou Mail's state: Solid signals and the actions the UI and the keyboard
 // share. Nothing here knows about views.
 import { batch, createMemo, createSignal } from "mantou-ui";
-import { ACCOUNTS, LABELS, ME, NOW, sampleMessages, threadOf, type Folder, type Message } from "./data";
+import { ACCOUNTS, LABELS, ME, NOW, sampleMessages, threadOf, type Contact, type Folder, type Message } from "./data";
 
 export type Mailbox =
   | { kind: "all" }
@@ -63,8 +63,45 @@ export const SNOOZE_OPTIONS = [
   { name: "Next week", time: "Mon 08:00", until: "Mon 9 Nov, 08:00" },
 ];
 
-/** The panel under the reader: quick replies, snooze times, or labels. */
+/** The panel under the reader: the reply composer, snooze times, or labels. */
 export type Panel = "reply" | "snooze" | "labels" | null;
+
+/** What the composer holds: a new message or a reply, typed but not sent. */
+export interface Draft {
+  kind: "new" | "reply";
+  /** The draft's message in Drafts, once saved. */
+  id: number | null;
+  account: string;
+  /** As typed: "Priya Shah <priya@northwind.dev>, jonas@acme.io". */
+  to: string;
+  subject: string;
+  body: string;
+  replyTo?: number;
+}
+
+const EMAIL = /^[^\s@<>,]+@[^\s@<>,]+\.[^\s@<>,]+$/;
+
+/**
+ * Parses a To line: comma-separated addresses, each "Name <email>" or a bare
+ * email. A bare email takes the name of a known sender with that address.
+ */
+export function parseRecipients(text: string, known: Contact[] = []): { ok: Contact[]; bad: string[] } {
+  const ok: Contact[] = [], bad: string[] = [];
+  for (const part of text.split(",").map((p) => p.trim()).filter(Boolean)) {
+    const m = /^(.*?)\s*<([^<>]+)>$/.exec(part);
+    const email = (m ? m[2] : part).trim(), name = m?.[1].replace(/^"|"$/g, "").trim();
+    if (!EMAIL.test(email)) bad.push(part);
+    else ok.push({ name: name || known.find((k) => k.email.toLowerCase() === email.toLowerCase())?.name || email, email });
+  }
+  return { ok, bad };
+}
+
+export const formatContacts = (cs: Contact[]) => cs.map((c) => (c.name && c.name !== c.email ? `${c.name} <${c.email}>` : c.email)).join(", ");
+
+/** A body as typed, as the message's paragraphs (split at blank lines). */
+export const paragraphs = (text: string) => text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+
+const reSubject = (subject: string) => (subject.startsWith("Re: ") ? subject : `Re: ${subject}`);
 
 export function createMail(initial: Message[] = sampleMessages()) {
   const [messages, setMessages] = createSignal(initial);
@@ -72,9 +109,20 @@ export function createMail(initial: Message[] = sampleMessages()) {
   const [tab, setTab] = createSignal<Tab>("important");
   const [selectedId, setSelectedId] = createSignal<number | null>(null);
   const [panel, setPanel] = createSignal<Panel>(null);
-  const [status, setStatus] = createSignal("");
-  /** Keys go to the search query (rather than triage) while this is on. */
+  const [status, setStatusText] = createSignal("");
+  /** The status reports a change that undo reverses (not, say, "Draft saved"). */
+  const [undoable, setUndoable] = createSignal(false);
+  const setStatus = (text: string, canUndo = false) => batch(() => {
+    setStatusText(text);
+    setUndoable(canUndo);
+  });
+  /** The search field has the keyboard focus. */
   const [searching, setSearching] = createSignal(false);
+  /** The new-message composer is open (replies are composed in the reply panel). */
+  const [composing, setComposing] = createSignal(false);
+  /** Why the draft couldn't be sent (cleared by the next edit). */
+  const [problem, setProblem] = createSignal("");
+  const [draft, setDraft] = createSignal<Draft>({ kind: "new", id: null, account: ACCOUNTS[0].id, to: "", subject: "", body: "" });
   /** Where Escape goes back to from a search. */
   let beforeSearch: Mailbox = { kind: "all" };
   const history: { messages: Message[]; selectedId: number | null }[] = [];
@@ -87,18 +135,18 @@ export function createMail(initial: Message[] = sampleMessages()) {
   });
   const selected = createMemo(() => list().find((m) => m.id === selectedId()) ?? list()[0] ?? null);
 
-  /** Messages per conversation, trash left out. */
+  /** Messages per conversation, trash and drafts left out. */
   const threadSizes = createMemo(() => {
     const sizes = new Map<number, number>();
-    for (const m of messages()) if (m.folder !== "trash") sizes.set(threadOf(m), (sizes.get(threadOf(m)) ?? 0) + 1);
+    for (const m of messages()) if (m.folder !== "trash" && m.folder !== "drafts") sizes.set(threadOf(m), (sizes.get(threadOf(m)) ?? 0) + 1);
     return sizes;
   });
-  /** The selected message's conversation, oldest first (trash left out, unless that's where the selection is). */
+  /** The selected message's conversation, oldest first (trash and drafts left out, unless that's where the selection is). */
   const conversation = createMemo(() => {
     const s = selected();
     if (!s) return [];
     return messages()
-      .filter((m) => threadOf(m) === threadOf(s) && (m.folder !== "trash" || m.id === s.id))
+      .filter((m) => threadOf(m) === threadOf(s) && ((m.folder !== "trash" && m.folder !== "drafts") || m.id === s.id))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   });
 
@@ -106,13 +154,20 @@ export function createMail(initial: Message[] = sampleMessages()) {
   const count = (m: Mailbox) => messages().filter((msg) => inMailbox(msg, m)).length;
   const unreadInTab = (t: Tab) => messages().filter((msg) => inMailbox(msg, mailbox()) && (t === "important") === msg.important && msg.unread).length;
   const threadSize = (msg: Message) => threadSizes().get(threadOf(msg)) ?? 1;
+  /** Everyone who has written to you, for names in the To line. */
+  const contacts = createMemo(() => {
+    const seen = new Map<string, Contact>();
+    for (const m of messages()) for (const c of [m.from, ...(m.to ?? [])]) if (c.name !== ME) seen.set(c.email.toLowerCase(), c);
+    return [...seen.values()];
+  });
+  const nextId = () => Math.max(0, ...messages().map((m) => m.id)) + 1;
 
   /** Changes messages; the previous state goes on the undo stack. */
   function change(fn: (ms: Message[]) => Message[], message: string) {
     history.push({ messages: messages(), selectedId: selected()?.id ?? null });
     if (history.length > 50) history.shift();
     setMessages(fn(messages()));
-    setStatus(message);
+    setStatus(message, true);
   }
   const patch = (id: number, p: Partial<Message>) => (ms: Message[]) => ms.map((m) => (m.id === id ? { ...m, ...p } : m));
 
@@ -124,10 +179,61 @@ export function createMail(initial: Message[] = sampleMessages()) {
     return (l[i + 1] ?? l[i - 1])?.id ?? null;
   }
 
+  /** Whether the draft has anything the user typed (a reply's To and Subject come filled in). */
+  const typed = (d: Draft) => !!d.body.trim() || (d.kind === "new" && !!(d.to.trim() || d.subject.trim()));
+
+  /** Keeps the draft in Drafts (or drops its saved copy when it's empty). Not an undo step. */
+  function saveDraft(): boolean {
+    const d = draft();
+    if (!typed(d)) {
+      if (d.id !== null) setMessages(messages().filter((m) => m.id !== d.id));
+      return false;
+    }
+    const account = ACCOUNTS.find((a) => a.id === d.account)!;
+    const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
+    const id = d.id ?? nextId();
+    const saved: Message = {
+      id, account: d.account, folder: "drafts", from: { name: ME, email: account.email },
+      to: parseRecipients(d.to, contacts()).ok, subject: d.subject, body: paragraphs(d.body), date: NOW,
+      unread: false, starred: false, important: true, labels: [],
+      thread: original ? threadOf(original) : undefined, draft: { to: d.to, replyTo: d.replyTo },
+    };
+    setMessages(d.id === null ? [...messages(), saved] : messages().map((m) => (m.id === id ? saved : m)));
+    setDraft({ ...d, id });
+    return true;
+  }
+  /** Closes the panel under the reader; a reply in progress is kept as a draft. */
+  function closePanel() {
+    batch(() => {
+      if (panel() === "reply" && saveDraft()) setStatus("Draft saved");
+      setPanel(null);
+    });
+  }
+  /** Opens the new-message composer: blank, or with a saved draft. */
+  function compose(from?: Message) {
+    if (composing()) return;
+    const box = mailbox();
+    batch(() => {
+      closePanel();
+      setDraft(from?.folder === "drafts" ? draftFrom(from) : {
+        kind: "new", id: null, to: "", subject: "", body: "",
+        account: box.kind === "account" ? box.id : (selected()?.account ?? ACCOUNTS[0].id),
+      });
+      setProblem("");
+      setComposing(true);
+    });
+  }
+  function draftFrom(msg: Message): Draft {
+    return {
+      kind: msg.draft?.replyTo === undefined ? "new" : "reply", id: msg.id, account: msg.account,
+      to: msg.draft?.to ?? formatContacts(msg.to ?? []), subject: msg.subject, body: msg.body.join("\n\n"), replyTo: msg.draft?.replyTo,
+    };
+  }
+
   function select(id: number) {
     batch(() => {
+      closePanel();
       setSelectedId(id);
-      setPanel(null);
       if (messages().find((m) => m.id === id)?.unread) setMessages(patch(id, { unread: false })(messages()));
     });
   }
@@ -140,7 +246,7 @@ export function createMail(initial: Message[] = sampleMessages()) {
       change(fn(s), status(s));
       setSelectedId(null);
       if (next !== null) select(next); // opening the next message marks it read, as opening any does
-      setPanel(null);
+      closePanel();
     });
   }
   const file = (folder: Folder, verb: string, extra: Partial<Message> = {}) =>
@@ -148,10 +254,9 @@ export function createMail(initial: Message[] = sampleMessages()) {
 
   function open(m: Mailbox) {
     batch(() => {
+      closePanel();
       setMailbox(m);
       setSelectedId(null);
-      setPanel(null);
-      setSearching(false);
     });
   }
   function setQuery(query: string) {
@@ -166,8 +271,8 @@ export function createMail(initial: Message[] = sampleMessages()) {
   };
 
   return {
-    messages, list, selected, mailbox, tab, panel, status, searching, conversation,
-    unread, count, unreadInTab, threadSize, select, open,
+    messages, list, selected, mailbox, tab, panel, status, searching, conversation, composing, draft, contacts, problem, undoable,
+    unread, count, unreadInTab, threadSize, select, open, closePanel,
     replying: () => panel() === "reply",
 
     move(delta: number) {
@@ -178,9 +283,9 @@ export function createMail(initial: Message[] = sampleMessages()) {
     },
     setTab(t: Tab) {
       batch(() => {
+        closePanel();
         setTab(t);
         setSelectedId(null);
-        setPanel(null);
       });
     },
     archive: () => file("archive", "Archived", { unread: false }),
@@ -212,34 +317,87 @@ export function createMail(initial: Message[] = sampleMessages()) {
     },
     /** Opens a panel, or closes it if it's open. */
     togglePanel(p: Exclude<Panel, null>) {
-      if (selected()) setPanel(panel() === p ? null : p);
+      if (!selected()) return;
+      if (panel() === p) return closePanel();
+      batch(() => {
+        closePanel();
+        setPanel(p);
+      });
     },
-    closePanel: () => setPanel(null),
+    /** Opens the reply composer for the selected message, with its saved draft if there is one. */
     toggleReply() {
-      if (selected()) setPanel(panel() === "reply" ? null : "reply");
-    },
-    reply(text: string) {
       const s = selected();
       if (!s) return;
-      const account = ACCOUNTS.find((a) => a.id === s.account)!;
-      const sent: Message = {
-        id: Math.max(...messages().map((m) => m.id)) + 1,
-        account: s.account,
-        folder: "sent",
-        from: { name: ME, email: account.email },
-        subject: s.subject.startsWith("Re: ") ? s.subject : `Re: ${s.subject}`,
-        body: [text],
-        date: NOW,
-        unread: false,
-        starred: false,
-        important: true,
-        labels: [],
-        thread: threadOf(s),
-      };
+      if (panel() === "reply") return closePanel();
+      if (s.folder === "drafts") return compose(s);
+      const saved = messages().find((m) => m.folder === "drafts" && m.draft?.replyTo === s.id);
       batch(() => {
-        change((ms) => [...patch(s.id, { waitingSince: NOW })(ms), sent], `Reply sent to ${s.from.name}`);
+        closePanel();
+        setDraft(saved ? draftFrom(saved) : {
+          kind: "reply", id: null, account: s.account, replyTo: s.id,
+          to: formatContacts([s.from.name === ME ? (s.to?.[0] ?? s.from) : s.from]), subject: reSubject(s.subject), body: "",
+        });
+        setProblem("");
+        setPanel("reply");
+      });
+    },
+
+    // Composing: the draft is edited field by field, then sent or kept in Drafts.
+    compose,
+    editDraft(p: Partial<Pick<Draft, "account" | "to" | "subject" | "body">>) {
+      batch(() => {
+        setDraft({ ...draft(), ...p });
+        setProblem("");
+      });
+    },
+    /** A quick reply as a starting point: added to the body. */
+    insertReply(text: string) {
+      const body = draft().body.trimEnd();
+      setDraft({ ...draft(), body: body ? `${body}\n\n${text}` : text });
+    },
+    /** Closes the new-message composer, keeping what was typed in Drafts. */
+    closeCompose() {
+      batch(() => {
+        if (saveDraft()) setStatus("Draft saved");
+        setComposing(false);
+      });
+    },
+    /** Throws the draft away (undo brings a saved one back). */
+    discard() {
+      const d = draft();
+      batch(() => {
+        if (d.id !== null) change((ms) => ms.filter((m) => m.id !== d.id), "Draft discarded");
+        else setStatus("Draft discarded");
+        setDraft({ ...d, id: null, to: "", subject: "", body: "" });
+        setComposing(false);
         setPanel(null);
       });
+    },
+    /** Sends the draft; false (and why, in the status) if it can't go yet. */
+    send(): boolean {
+      const d = draft();
+      const { ok, bad } = parseRecipients(d.to, contacts());
+      if (bad.length) return setProblem(`“${bad[0]}” isn't an email address`), false;
+      if (!ok.length) return setProblem("Add a recipient first"), false;
+      if (!d.body.trim() && !d.subject.trim()) return setProblem("Write something first"), false;
+      const account = ACCOUNTS.find((a) => a.id === d.account)!;
+      const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
+      const sent: Message = {
+        id: nextId(), account: d.account, folder: "sent", from: { name: ME, email: account.email }, to: ok,
+        subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: NOW,
+        unread: false, starred: false, important: true, labels: [], thread: original ? threadOf(original) : undefined,
+      };
+      batch(() => {
+        change((ms) => {
+          let out = ms.filter((m) => m.id !== d.id);
+          if (original) out = patch(original.id, { waitingSince: NOW })(out);
+          return [...out, sent];
+        }, `Sent to ${ok.map((c) => c.name).join(", ")}`);
+        setDraft({ ...d, id: null, to: "", subject: "", body: "" });
+        setComposing(false);
+        setPanel(null);
+      });
+      return true;
     },
     undo() {
       const prev = history.pop();
@@ -251,28 +409,26 @@ export function createMail(initial: Message[] = sampleMessages()) {
       });
     },
 
-    // Search: the query is typed with the keyboard while `searching` is on.
+    // Search: the search field's focus and text drive these.
     query,
+    setQuery,
+    /** The search field got the focus: results replace the mailbox (empty until something is typed). */
     startSearch() {
       batch(() => {
         if (mailbox().kind !== "search") {
           beforeSearch = mailbox();
+          closePanel();
           setQuery("");
         }
-        setPanel(null);
         setSearching(true);
       });
     },
-    type(text: string) {
-      setQuery(query() + text);
-    },
-    backspace() {
-      setQuery(query().slice(0, -1));
-    },
-    /** Enter: keys go back to triage, the results stay (an empty query goes back). */
-    submitSearch() {
-      if (!query().trim()) return open(beforeSearch);
-      setSearching(false);
+    /** The search field lost the focus: with nothing typed, back to where the search started. */
+    endSearch() {
+      batch(() => {
+        setSearching(false);
+        if (mailbox().kind === "search" && !query().trim()) open(beforeSearch);
+      });
     },
     /** Escape: back to where the search started. */
     cancelSearch: () => open(beforeSearch),

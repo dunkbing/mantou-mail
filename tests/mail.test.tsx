@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
-import { createMail, type Mail } from "../src/state";
+import { createMail, parseRecipients, type Mail } from "../src/state";
 
 const open: HeadlessCore[] = [];
 afterEach(() => open.splice(0).forEach((h) => h.free()));
@@ -28,6 +28,7 @@ function text(h: HeadlessCore, content: string, nth = 0): Node {
   if (!found[nth]) throw new Error(`no text "${content}" (have: ${texts(h).slice(0, 40).join(" | ")})`);
   return found[nth];
 }
+const inputs = (h: HeadlessCore) => [...h.ui.nodes.values()].filter((n) => n.isInput).sort((a, b) => h.rect(a)![1] - h.rect(b)![1] || h.rect(a)![0] - h.rect(b)![0]);
 const readerSubject = (h: HeadlessCore, mail: Mail) => text(h, mail.selected()!.subject, 1); // [0] is the list row
 
 test("opens on the Important tab of all inboxes, newest first, with the first message in the reader", () => {
@@ -92,17 +93,132 @@ test("the wheel scrolls the list, and the selection stays in view", () => {
   expect(r[3]).toBeLessThan(760 - 28);
 });
 
-test("quick reply: r shows the replies, 1 sends the first", () => {
+const SEND = { primary: true } as const; // Ctrl+Enter, or ⌘+Enter on macOS
+
+test("reply: r opens the composer with the focus in it; a quick reply is a start; Ctrl+Enter sends", () => {
   const { h, mail } = app();
   h.key("r");
   expect(mail.replying()).toBe(true);
-  expect(texts(h).some((t) => t.startsWith("QUICK REPLY TO PRIYA SHAH"))).toBe(true);
-  h.key("1");
+  expect(texts(h)).toContain("REPLY TO PRIYA SHAH");
+  expect(h.focused()).not.toBe(null); // typing goes to the reply, not to triage
+  h.press(text(h, "Thanks, got it!", -1));
+  h.key("End");
+  h.type(" I'll read it tonight.");
+  expect(mail.draft().body).toBe("Thanks, got it! I'll read it tonight.");
+  expect(mail.list().length).toBe(11); // "e", "#" and the rest were typed, not triage
+  h.key("Enter", SEND);
   expect(mail.replying()).toBe(false);
-  expect(texts(h)).toContain("Reply sent to Priya Shah");
-  expect(mail.conversation().at(-1)!.body).toEqual(["Thanks, got it!"]); // the reply joins the conversation
+  expect(texts(h)).toContain("Sent to Priya Shah");
+  const sent = mail.conversation().at(-1)!; // the reply joins the conversation
+  expect(sent).toMatchObject({ folder: "sent", subject: "Re: Onboarding flow: final review before Thursday", body: ["Thanks, got it! I'll read it tonight."] });
+  expect(sent.to).toEqual([{ name: "Priya Shah", email: "priya@northwind.dev" }]);
+  expect(mail.selected()!.waitingSince).toBeDefined();
+  h.key("z"); // undo send
+  expect(mail.messages().some((m) => m.id === sent.id)).toBe(false);
+});
+
+test("a reply in progress is kept as a draft: Esc saves it, r brings it back, Discard drops it", () => {
+  const { h, mail } = app();
+  h.key("r");
+  h.type("Half a thought");
+  h.key("Escape");
+  expect(mail.replying()).toBe(false);
+  expect(texts(h)).toContain("Draft saved");
+  expect(texts(h)).not.toContain("Undo"); // saving a draft isn't an undo step
+  expect(mail.count({ kind: "folder", folder: "drafts" })).toBe(1);
+  expect(mail.conversation().length).toBe(3); // drafts stay out of the conversation
+  h.key("r");
+  expect(mail.draft().body).toBe("Half a thought");
+  h.press(text(h, "Discard"));
+  expect(mail.count({ kind: "folder", folder: "drafts" })).toBe(0);
+  expect(texts(h)).toContain("Draft discarded");
+});
+
+test("compose: c opens a new message; Enter moves on from To and Subject; it sends to a known name", () => {
+  const { h, mail } = app();
+  h.key("c");
+  expect(mail.composing()).toBe(true);
+  expect(texts(h)).toContain("New message");
+  h.type("jonas@acme.io");
+  h.key("Enter");
+  h.type("Renewal call");
+  h.key("Enter");
+  h.type("Hi Jonas,\n\nThe 15th works. 10:00 your time?");
+  expect(mail.draft()).toMatchObject({ to: "jonas@acme.io", subject: "Renewal call", body: "Hi Jonas,\n\nThe 15th works. 10:00 your time?" });
+  h.press(text(h, "Personal · sam.rivera@fastmail.com"));
+  h.press(text(h, "Work · sam@northwind.dev"));
+  h.key("Enter", SEND);
+  expect(mail.composing()).toBe(false);
+  expect(texts(h)).toContain("Sent to Jonas Weber"); // the name comes from his earlier mail
   h.press(text(h, "Sent"));
-  expect(mail.list().map((m) => m.subject)).toContain("Re: Onboarding flow: final review before Thursday");
+  expect(mail.selected()).toMatchObject({ subject: "Renewal call", body: ["Hi Jonas,", "The 15th works. 10:00 your time?"], account: "work" });
+  expect(texts(h)).toContain("To: Jonas Weber");
+});
+
+test("compose won't send to a bad address, or to nobody", () => {
+  const { h, mail } = app();
+  h.press(text(h, "Compose"));
+  h.press(text(h, "Send"));
+  expect(texts(h)).toContain("Add a recipient first");
+  h.press(inputs(h)[1]); // the To line ([0] is search)
+  h.type("Priya Shah <priya@northwind.dev>, not-an-email");
+  expect(texts(h)).not.toContain("Add a recipient first"); // an edit clears the problem
+  h.key("Tab"); // Tab moves through the inputs: Subject, then the text
+  h.key("Tab");
+  h.type("Hello");
+  h.key("Enter", SEND);
+  expect(texts(h)).toContain("“not-an-email” isn't an email address");
+  expect(mail.composing()).toBe(true);
+});
+
+test("Esc keeps a new message in Drafts; Enter on it opens it again", () => {
+  const { h, mail } = app();
+  h.key("c");
+  h.type("alex.kim@hey.com");
+  h.key("Enter");
+  h.type("Lisbon");
+  h.key("Escape");
+  expect(mail.composing()).toBe(false);
+  h.press(text(h, "Drafts"));
+  expect(texts(h)).toContain("To: Alex Kim");
+  expect(texts(h)).toContain("Draft");
+  h.key("Enter");
+  expect(mail.composing()).toBe(true);
+  expect(mail.draft()).toMatchObject({ to: "alex.kim@hey.com", subject: "Lisbon" });
+  h.key("Escape");
+  expect(mail.count({ kind: "folder", folder: "drafts" })).toBe(1); // the same draft, not a second one
+  h.press(text(h, "Edit draft"));
+  h.press(text(h, "Discard"));
+  expect(mail.count({ kind: "folder", folder: "drafts" })).toBe(0);
+});
+
+test("the search field is an Input: / focuses it, a press elsewhere leaves it, results stay", () => {
+  const { h, mail } = app();
+  h.key("/");
+  expect(h.focused()).not.toBe(null);
+  expect(mail.searching()).toBe(true);
+  h.type("receipt");
+  h.press(text(h, "Your receipt from Figma #2231-7746"));
+  expect(h.focused()).toBe(null);
+  expect(mail.searching()).toBe(false);
+  expect(mail.query()).toBe("receipt");
+  h.key("/");
+  h.key("Escape");
+  expect(h.focused()).toBe(null);
+  expect(mail.mailbox()).toEqual({ kind: "all" });
+});
+
+test("To lines parse names and addresses", () => {
+  const known = [{ name: "Jonas Weber", email: "jonas@acme.io" }];
+  expect(parseRecipients("Priya Shah <priya@northwind.dev>, JONAS@acme.io, \"Mum\" <elena.rivera@gmail.com>", known)).toEqual({
+    ok: [
+      { name: "Priya Shah", email: "priya@northwind.dev" },
+      { name: "Jonas Weber", email: "JONAS@acme.io" },
+      { name: "Mum", email: "elena.rivera@gmail.com" },
+    ],
+    bad: [],
+  });
+  expect(parseRecipients("sam, sam@, @x.io, a@b").bad).toEqual(["sam", "sam@", "@x.io", "a@b"]);
 });
 
 test("the sidebar switches mailboxes and shows unread counts", () => {

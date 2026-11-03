@@ -1,8 +1,12 @@
 // Mantou Mail: a sidebar of mailboxes and labels, a message list, a reader
 // that shows the whole conversation, and keyboard triage (? lists the keys).
-import { For, Show, Text, View, createEffect, createSignal, defineStyle, on, onCleanup, onKey, useUi, type Node } from "mantou-ui";
+import { For, Input, Show, Text, View, createEffect, createSignal, defineStyle, on, onCleanup, onKey, useUi, type Node } from "mantou-ui";
 import { ACCOUNTS, LABELS, ME, daysSince, longDate, shortDate, type Message } from "./data";
 import { QUICK_REPLIES, SNOOZE_OPTIONS, createMail, isFiledAway, mailboxName, sameMailbox, usesTabs, type Mail, type Mailbox, type Tab } from "./state";
+
+/** The platform's shortcut key, as the keyboard shows it. */
+const PRIMARY = process.platform === "darwin" ? "⌘" : "Ctrl";
+const SEND_KEYS = `${PRIMARY}+Enter`;
 
 // ---------------------------------------------------------------- theme
 const C = {
@@ -139,28 +143,30 @@ function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; count?
 }
 
 /**
- * The search field. The query is typed through onKey and drawn as text with
- * a caret: no selection, no cursor movement, no IME, no paste. It predates
- * Mantou's <Input> (in mantou-ui 0.1.1) and should move to it
- * (docs/upstream.md, "Text input").
+ * The search field: `/` focuses it, typing searches as you go, Enter keeps
+ * the results and hands the keys back to triage, Esc goes back.
  */
-function SearchField(props: { mail: Mail }) {
+function SearchField(props: { mail: Mail; ref: (n: Node) => void }) {
   const m = props.mail;
+  let input: Node | undefined;
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", gap: 2, height: 32, flexShrink: 0, marginBottom: 12, paddingLeft: 10, paddingRight: 8, borderRadius: 7, borderWidth: 1, borderColor: m.searching() ? C.accent : C.line, backgroundColor: "#ffffff" }}
-      onPress={m.startSearch}
+      style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, flexShrink: 0, marginBottom: 12, paddingLeft: 4, paddingRight: 8, borderRadius: 7, borderWidth: 1, borderColor: m.searching() ? C.accent : C.line, backgroundColor: "#ffffff" }}
+      onPress={() => input?.focus()}
     >
-      <Show when={m.query()}>
-        <Text style={{ flexShrink: 1, fontSize: 13, color: C.text, maxLines: 1 }}>{m.query()}</Text>
-      </Show>
-      <Show when={m.searching()}>
-        <View style={{ width: 1.5, height: 16, flexShrink: 0, backgroundColor: C.accent }} />
-      </Show>
-      <Show when={!m.query()}>
-        <Text style={{ flexShrink: 1, fontSize: 13, color: C.muted, maxLines: 1, paddingLeft: m.searching() ? 2 : 0 }}>Search mail</Text>
-      </Show>
-      <View style={{ flexGrow: 1 }} />
+      <Input
+        ref={(n) => props.ref((input = n))}
+        value={m.query()}
+        placeholder="Search mail"
+        onChange={m.setQuery}
+        onFocus={m.startSearch}
+        onBlur={m.endSearch}
+        onSubmit={() => {
+          if (!m.query().trim()) m.cancelSearch();
+          input?.blur();
+        }}
+        style={{ flexGrow: 1, flexBasis: 0, height: 28, paddingLeft: 6, fontSize: 13, color: C.text, placeholderColor: C.muted, caretColor: C.accent }}
+      />
       <Kbd text={m.searching() ? "Esc" : "/"} />
     </View>
   );
@@ -174,7 +180,7 @@ function Kbd(props: { text: string }) {
   );
 }
 
-function Sidebar(props: { mail: Mail }) {
+function Sidebar(props: { mail: Mail; searchRef: (n: Node) => void }) {
   const m = props.mail;
   return (
     <View style={{ width: 228, flexShrink: 0, paddingTop: 18, paddingLeft: 12, paddingRight: 12, gap: 2, backgroundColor: C.sidebar }}>
@@ -184,7 +190,14 @@ function Sidebar(props: { mail: Mail }) {
         </View>
         <Text style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Mantou Mail</Text>
       </View>
-      <SearchField mail={m} />
+      <View
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 34, flexShrink: 0, marginBottom: 10, borderRadius: 7, backgroundColor: C.accent }}
+        onPress={() => m.compose()}
+      >
+        <Text style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Compose</Text>
+        <Text style={{ fontSize: 11, fontWeight: 600, color: "#c7d2fe" }}>C</Text>
+      </View>
+      <SearchField mail={m} ref={props.searchRef} />
       <SidebarItem mail={m} mailbox={{ kind: "all" }} name="All inboxes" count={m.unread({ kind: "all" })} />
       <For each={ACCOUNTS}>
         {(a) => <SidebarItem mail={m} mailbox={{ kind: "account", id: a.id }} name={a.name} count={m.unread({ kind: "account", id: a.id })} indent />}
@@ -192,6 +205,7 @@ function Sidebar(props: { mail: Mail }) {
       <View style={{ height: 10 }} />
       <SidebarItem mail={m} mailbox={{ kind: "starred" }} name="Starred" count={m.count({ kind: "starred" })} />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "snoozed" }} name="Snoozed" count={m.count({ kind: "folder", folder: "snoozed" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "drafts" }} name="Drafts" count={m.count({ kind: "folder", folder: "drafts" })} />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "sent" }} name="Sent" />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "archive" }} name="Archive" />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "trash" }} name="Trash" count={m.count({ kind: "folder", folder: "trash" })} />
@@ -266,6 +280,13 @@ function Toolbar(props: { mail: Mail }) {
 // ---------------------------------------------------------------- list
 const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
 
+/** Who a row is about: the sender, or for mail you wrote, who it's to. */
+function rowName(msg: Message) {
+  if (msg.from.name !== ME) return msg.from.name;
+  const to = msg.to?.map((c) => c.name).join(", ");
+  return to ? `To: ${to}` : msg.folder === "drafts" ? "Draft" : msg.from.name;
+}
+
 function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void }) {
   const msg = () => props.message;
   const selected = () => props.mail.selected()?.id === msg().id;
@@ -276,16 +297,13 @@ function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void }) {
     <View
       ref={props.ref}
       style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : "#ffffff" }}
-      onPress={() => {
-        if (props.mail.searching()) props.mail.submitSearch(); // keys go back to triage
-        props.mail.select(msg().id);
-      }}
+      onPress={() => props.mail.select(msg().id)}
     >
       <View style={{ width: 6, height: 6, flexShrink: 0, marginTop: 13, borderRadius: 3, backgroundColor: msg().unread ? C.unread : "transparent" }} />
       <Avatar name={msg().from.name} size={32} />
       <View style={{ flexGrow: 1, flexShrink: 1, gap: 3 }}>
         <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-          <Text style={{ flexShrink: 1, fontSize: 13, fontWeight: msg().unread ? 700 : 500, color: C.text, maxLines: 1 }}>{msg().from.name}</Text>
+          <Text style={{ flexShrink: 1, fontSize: 13, fontWeight: msg().unread ? 700 : 500, color: C.text, maxLines: 1 }}>{rowName(msg())}</Text>
           <Show when={size() > 1}>
             <Text style={{ flexShrink: 0, fontSize: 12, color: C.muted }}>{String(size())}</Text>
           </Show>
@@ -295,10 +313,13 @@ function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void }) {
           </Show>
           <Text style={small}>{shortDate(msg().date)}</Text>
         </View>
-        <Text style={{ fontSize: 13, fontWeight: msg().unread ? 600 : 400, color: C.text, maxLines: 1 }}>{msg().subject}</Text>
+        <Text style={{ fontSize: 13, fontWeight: msg().unread ? 600 : 400, color: C.text, maxLines: 1 }}>{msg().subject || "(no subject)"}</Text>
         <Text style={{ fontSize: 12, color: C.secondary, maxLines: 1 }}>{msg().body.join(" ").replace(/\s+/g, " ")}</Text>
-        <Show when={msg().labels.length > 0 || msg().waitingSince || msg().snoozedUntil || folder()}>
+        <Show when={msg().labels.length > 0 || msg().waitingSince || msg().snoozedUntil || folder() || msg().folder === "drafts"}>
           <View style={{ flexDirection: "row", gap: 6, paddingTop: 4, flexWrap: "wrap" }}>
+            <Show when={msg().folder === "drafts"}>
+              <Chip text="Draft" color="#b91c1c" background="#fef2f2" />
+            </Show>
             <Show when={folder()}>
               <Chip text={folder() ?? ""} color={C.secondary} background={C.faint} />
             </Show>
@@ -386,7 +407,7 @@ function OpenMessage(props: { message: Message; onPress?: () => void }) {
         <Avatar name={msg().from.name} size={40} />
         <View style={{ flexGrow: 1, flexShrink: 1, gap: 2 }}>
           <Text style={{ fontSize: 14, fontWeight: 600, color: C.text, maxLines: 1 }}>{displayName(msg().from.name)}</Text>
-          <Text style={[small, { maxLines: 1 }]}>{msg().from.name === ME ? msg().from.email : `${msg().from.email} → ${to()}`}</Text>
+          <Text style={[small, { maxLines: 1 }]}>{`${msg().from.email} → ${msg().from.name === ME ? (msg().to?.map((c) => c.email).join(", ") || "no recipients yet") : to()}`}</Text>
         </View>
         <Text style={small}>{longDate(msg().date)}</Text>
       </View>
@@ -406,6 +427,151 @@ function FoldedMessage(props: { message: Message; onPress: () => void }) {
       <Text style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, color: C.text, maxLines: 1 }}>{displayName(msg().from.name)}</Text>
       <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 13, color: C.secondary, maxLines: 1 }}>{msg().body.join(" ").replace(/\s+/g, " ")}</Text>
       <Text style={[small, { flexShrink: 0 }]}>{shortDate(msg().date)}</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- compose
+function SendButton(props: { onPress: () => void }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 32, flexShrink: 0, paddingLeft: 14, paddingRight: 12, borderRadius: 7, backgroundColor: C.accent }} onPress={props.onPress}>
+      <Text style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Send</Text>
+      <Text style={{ fontSize: 11, fontWeight: 600, color: "#c7d2fe" }}>{SEND_KEYS}</Text>
+    </View>
+  );
+}
+
+function TextButton(props: { label: string; onPress: () => void }) {
+  return (
+    <View style={{ height: 32, flexShrink: 0, paddingLeft: 10, paddingRight: 10, justifyContent: "center", borderRadius: 7 }} onPress={props.onPress}>
+      <Text style={{ fontSize: 13, fontWeight: 500, color: C.secondary }}>{props.label}</Text>
+    </View>
+  );
+}
+
+/** Why the draft can't be sent yet, beside the Send button. */
+function Problem(props: { mail: Mail }) {
+  return (
+    <Show when={props.mail.problem()}>
+      <Text style={{ flexShrink: 1, fontSize: 12, color: "#b91c1c", maxLines: 1 }}>{props.mail.problem()}</Text>
+    </Show>
+  );
+}
+
+const field = defineStyle({ fontSize: 14, color: C.text, placeholderColor: C.muted, caretColor: C.accent, selectionColor: "#c7d2fe" });
+
+/** A reply, written under the conversation. Quick replies are starting points. */
+function ReplyComposer(props: { mail: Mail }) {
+  const m = props.mail;
+  let body: Node | undefined;
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        <For each={QUICK_REPLIES}>
+          {(text) => (
+            <View style={{ height: 28, paddingLeft: 12, paddingRight: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", justifyContent: "center" }} onPress={() => {
+                m.insertReply(text);
+                body?.focus(); // the press took the focus; give it back to keep typing
+              }}>
+              <Text style={{ fontSize: 12, color: C.text }}>{text}</Text>
+            </View>
+          )}
+        </For>
+      </View>
+      <Input
+        ref={(n) => (body = n)}
+        multiline
+        autoFocus
+        value={m.draft().body}
+        placeholder="Write a reply"
+        onChange={(body) => m.editDraft({ body })}
+        onSubmit={() => m.send()}
+        style={[field, { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", lineHeight: 1.5 }]}
+      />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <SendButton onPress={() => m.send()} />
+        <TextButton label="Discard" onPress={m.discard} />
+        <Problem mail={m} />
+      </View>
+    </View>
+  );
+}
+
+/** A new message (or a saved draft), over the app: From, To, Subject, the text. */
+function Composer(props: { mail: Mail }) {
+  const m = props.mail;
+  // Decided once, when the composer opens: a draft with recipients starts in
+  // the text. Workaround for dunkbing/mantou#4: an autoFocus that turns true
+  // later focuses the input then, so it mustn't follow the To line.
+  const startInBody = !!m.draft().to;
+  let subject: Node | undefined;
+  let body: Node | undefined;
+  const label = (text: string) => <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{text}</Text>;
+  const row = defineStyle({ flexDirection: "row", alignItems: "center", minHeight: 44, paddingLeft: 20, paddingRight: 20 });
+  return (
+    <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={m.closeCompose}>
+      <View style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 20, paddingRight: 16, backgroundColor: "#fafafa" }}>
+          <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>{m.draft().id === null ? "New message" : "Draft"}</Text>
+          <Text style={[small, { paddingRight: 8 }]}>Esc keeps it in Drafts</Text>
+          <Kbd text="Esc" />
+        </View>
+        <View style={hline} />
+        <View style={[row, { gap: 6 }]}>
+          {label("From")}
+          <For each={ACCOUNTS}>
+            {(a) => (
+              <View
+                style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 14, borderWidth: 1, justifyContent: "center", borderColor: m.draft().account === a.id ? C.accent : C.line, backgroundColor: m.draft().account === a.id ? C.accentSoft : "#ffffff" }}
+                onPress={() => m.editDraft({ account: a.id })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: 500, color: m.draft().account === a.id ? C.accent : C.secondary }}>{`${a.name} · ${a.email}`}</Text>
+              </View>
+            )}
+          </For>
+        </View>
+        <View style={hline} />
+        <View style={row}>
+          {label("To")}
+          <Input
+            autoFocus={!startInBody}
+            value={m.draft().to}
+            placeholder="Name <email>, separated by commas"
+            onChange={(to) => m.editDraft({ to })}
+            onSubmit={() => subject?.focus()}
+            style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+          />
+        </View>
+        <View style={hline} />
+        <View style={row}>
+          {label("Subject")}
+          <Input
+            ref={(n) => (subject = n)}
+            value={m.draft().subject}
+            placeholder="What it's about"
+            onChange={(subject) => m.editDraft({ subject })}
+            onSubmit={() => body?.focus()}
+            style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+          />
+        </View>
+        <View style={hline} />
+        <Input
+          ref={(n) => (body = n)}
+          multiline
+          autoFocus={startInBody}
+          value={m.draft().body}
+          placeholder="Write your message"
+          onChange={(body) => m.editDraft({ body })}
+          onSubmit={() => m.send()}
+          style={[field, { height: 280, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20, lineHeight: 1.5 }]}
+        />
+        <View style={hline} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 56, paddingLeft: 16, paddingRight: 16 }}>
+          <SendButton onPress={() => m.send()} />
+          <TextButton label="Discard" onPress={m.discard} />
+          <Problem mail={m} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -431,14 +597,14 @@ function Panel(props: { mail: Mail }) {
       <View style={{ paddingTop: 14, paddingBottom: 16, paddingLeft: 36, paddingRight: 36, gap: 10, backgroundColor: "#fafafa" }}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={[caption, { flexGrow: 1, flexShrink: 1, maxLines: 1 }]}>
-            {m.panel() === "reply" ? `QUICK REPLY TO ${s().from.name.toUpperCase()}` : m.panel() === "snooze" ? "SNOOZE UNTIL" : "LABELS"}
+            {m.panel() === "reply" ? `REPLY TO ${m.draft().to.replace(/\s*<.*$/, "").toUpperCase()}` : m.panel() === "snooze" ? "SNOOZE UNTIL" : "LABELS"}
           </Text>
-          <Text style={[caption, { fontWeight: 500 }]}>Esc to close</Text>
+          <Text style={[caption, { fontWeight: 500 }]}>{m.panel() === "reply" ? "Esc keeps a draft" : "Esc to close"}</Text>
         </View>
+        <Show when={m.panel() === "reply"}>
+          <ReplyComposer mail={m} />
+        </Show>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          <Show when={m.panel() === "reply"}>
-            <For each={QUICK_REPLIES}>{(text, i) => option(String(i() + 1), text, () => m.reply(text))}</For>
-          </Show>
           <Show when={m.panel() === "snooze"}>
             <For each={SNOOZE_OPTIONS}>{(o, i) => option(String(i() + 1), `${o.name} · ${o.time}`, () => m.snooze(i()))}</For>
           </Show>
@@ -472,7 +638,16 @@ function Reader(props: { mail: Mail }) {
       <Show when={m.selected()} fallback={<Text style={[small, { padding: 48, textAlign: "center" }]}>No message selected</Text>}>
         <View ref={scroll.viewportRef} style={{ ...RELATIVE, flexGrow: 1, minHeight: 0, overflow: "hidden" }} onWheel={(e) => scroll.by(e.dy)}>
           <View ref={scroll.contentRef} style={{ marginTop: -scroll.y(), paddingTop: 28, paddingLeft: 36, paddingRight: 36, paddingBottom: 28, gap: 18 }}>
-            <Text style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject}</Text>
+            <Text style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject || "(no subject)"}</Text>
+            <Show when={m.selected()!.folder === "drafts"}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Chip text="Draft" color="#b91c1c" background="#fef2f2" />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingLeft: 10, paddingRight: 8, borderRadius: 6, borderWidth: 1, borderColor: C.line }} onPress={() => m.compose(m.selected()!)}>
+                  <Text style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Edit draft</Text>
+                  <Kbd text="Enter" />
+                </View>
+              </View>
+            </Show>
             <Show when={m.selected()!.labels.length > 0 || m.selected()!.waitingSince || m.conversation().length > 1}>
               <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
                 <Show when={m.conversation().length > 1}>
@@ -507,14 +682,14 @@ function Reader(props: { mail: Mail }) {
 
 // ---------------------------------------------------------------- shortcuts
 const SHORTCUTS: [string, string][][] = [
-  [["J / K", "Older / newer message"], ["1 / 2", "Important / Other"], ["/", "Search"], ["Esc", "Close, or leave search"], ["?", "These shortcuts"]],
-  [["E", "Archive"], ["I", "Move to Inbox"], ["#", "Delete"], ["H", "Snooze"], ["L", "Labels"], ["S", "Star"], ["U", "Mark read / unread"], ["R", "Quick reply"], ["Z", "Undo"]],
+  [["J / K", "Older / newer message"], ["1 / 2", "Important / Other"], ["/", "Search"], ["C", "Compose"], ["R", "Reply"], [SEND_KEYS, "Send"], ["Enter", "Open a draft"], ["Esc", "Close (keeps a draft), leave search"], ["?", "These shortcuts"]],
+  [["E", "Archive"], ["I", "Move to Inbox"], ["#", "Delete"], ["H", "Snooze"], ["L", "Labels"], ["S", "Star"], ["U", "Mark read / unread"], ["Z", "Undo"]],
 ];
 
 function Shortcuts(props: { onClose: () => void }) {
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={props.onClose}>
-      <View style={{ width: 560, paddingTop: 22, paddingBottom: 24, paddingLeft: 28, paddingRight: 28, gap: 18, borderRadius: 12, backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+      <View style={{ width: 640, paddingTop: 22, paddingBottom: 24, paddingLeft: 28, paddingRight: 28, gap: 18, borderRadius: 12, backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={{ flexGrow: 1, fontSize: 16, fontWeight: 700, color: C.text }}>Keyboard shortcuts</Text>
           <Kbd text="Esc" />
@@ -526,7 +701,7 @@ function Shortcuts(props: { onClose: () => void }) {
                 <For each={column}>
                   {([keys, what]) => (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <View style={{ width: 52, flexShrink: 0, flexDirection: "row" }}>
+                      <View style={{ width: 84, flexShrink: 0, flexDirection: "row" }}>
                         <Kbd text={keys} />
                       </View>
                       <Text style={{ flexShrink: 1, fontSize: 13, color: C.text, maxLines: 1 }}>{what}</Text>
@@ -548,7 +723,7 @@ function StatusBar(props: { mail: Mail; onHelp: () => void }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", height: 28, flexShrink: 0, paddingLeft: 16, paddingRight: 12, gap: 12, backgroundColor: "#fafafa" }}>
       <Text style={{ flexShrink: 1, fontSize: 12, color: C.secondary, maxLines: 1 }}>{m.status() || `${m.list().length} conversations`}</Text>
-      <Show when={m.status() && m.status() !== "Undone" && m.status() !== "Nothing to undo"}>
+      <Show when={m.undoable()}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, height: 22, flexShrink: 0, paddingLeft: 6, paddingRight: 6, borderRadius: 5 }} onPress={m.undo}>
           <Text style={{ fontSize: 12, fontWeight: 600, color: C.accent }}>Undo</Text>
           <Kbd text="Z" />
@@ -567,31 +742,39 @@ export function App(props: { mail?: Mail }) {
   const m = props.mail ?? createMail();
   const ui = useUi();
   const [help, setHelp] = createSignal(false);
+  let searchInput: Node | undefined;
   createEffect(() => {
     const unread = m.unread({ kind: "all" });
     ui.title(unread ? `Mantou Mail — ${unread} unread` : "Mantou Mail");
   });
   onKey((e) => {
-    if (e.type !== "keyDown" || e.ctrl || e.meta || e.alt) return;
+    if (e.type !== "keyDown") return;
+    // Composing: Esc closes (keeping a draft); Ctrl/⌘+Enter sends from anywhere in it
+    // (the text field submits by itself; this covers the To and Subject lines and no focus).
+    if (m.composing() || m.panel() === "reply") {
+      if (e.key === "Escape") return m.composing() ? m.closeCompose() : m.closePanel();
+      if (e.key === "Enter" && (e.ctrl || e.meta)) return void m.send();
+      return; // keys the inputs didn't take aren't triage while a message is being written
+    }
+    if (e.ctrl || e.meta || e.alt) return;
     if (help()) {
       if (e.key === "Escape" || e.key === "?") setHelp(false);
       return;
     }
+    // The search field keeps the keys it types with; Esc, Up and Down still come here.
     if (m.searching()) {
       switch (e.key) {
-        case "Escape": return m.cancelSearch();
-        case "Enter": return m.submitSearch();
-        case "Backspace": return m.backspace();
+        case "Escape":
+          m.cancelSearch();
+          return searchInput?.blur();
         case "ArrowDown": return m.move(1);
         case "ArrowUp": return m.move(-1);
       }
-      if ([...e.key].length === 1) m.type(e.key);
       return;
     }
     const panel = m.panel();
     if (panel && /^[1-9]$/.test(e.key)) {
       const i = Number(e.key) - 1;
-      if (panel === "reply" && QUICK_REPLIES[i]) return m.reply(QUICK_REPLIES[i]);
       if (panel === "snooze") return m.snooze(i);
       if (panel === "labels" && LABELS[i]) return m.toggleLabel(LABELS[i].id);
       return;
@@ -608,7 +791,9 @@ export function App(props: { mail?: Mail }) {
       case "h": return m.togglePanel("snooze");
       case "l": return m.togglePanel("labels");
       case "z": return m.undo();
-      case "/": return m.startSearch();
+      case "/": return searchInput?.focus();
+      case "c": return m.compose();
+      case "Enter": return m.selected()?.folder === "drafts" && m.compose(m.selected()!);
       case "?": return setHelp(true);
       case "1": return usesTabs(m.mailbox()) && m.setTab("important");
       case "2": return usesTabs(m.mailbox()) && m.setTab("other");
@@ -623,7 +808,7 @@ export function App(props: { mail?: Mail }) {
     // minHeight 0: flex items are at least as tall as their content otherwise
     // (as in CSS), and the list and reader clip and scroll instead.
     <View style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: "#ffffff" }}>
-      <Sidebar mail={m} />
+      <Sidebar mail={m} searchRef={(n) => (searchInput = n)} />
       <View style={vline} />
       <View style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}>
         <Toolbar mail={m} />
@@ -637,6 +822,9 @@ export function App(props: { mail?: Mail }) {
         <View style={hline} />
         <StatusBar mail={m} onHelp={() => setHelp(true)} />
       </View>
+      <Show when={m.composing()}>
+        <Composer mail={m} />
+      </Show>
       <Show when={help()}>
         <Shortcuts onClose={() => setHelp(false)} />
       </Show>

@@ -3,7 +3,7 @@
 
 export const NOW = new Date("2026-11-03T09:30:00");
 
-export type Folder = "inbox" | "archive" | "trash" | "sent" | "snoozed";
+export type Folder = "inbox" | "archive" | "trash" | "sent" | "snoozed" | "drafts";
 
 export interface Label {
   id: string;
@@ -29,11 +29,16 @@ export const ACCOUNTS: Account[] = [
   { id: "personal", name: "Personal", email: "sam.rivera@fastmail.com" },
 ];
 
+export interface Contact {
+  name: string;
+  email: string;
+}
+
 export interface Message {
   id: number;
   account: string;
   folder: Folder;
-  from: { name: string; email: string };
+  from: Contact;
   subject: string;
   body: string[];
   date: Date;
@@ -45,6 +50,10 @@ export interface Message {
   /** You replied and are waiting for an answer, since this date. */
   waitingSince?: Date;
   snoozedUntil?: string;
+  /** Who it went to (messages you sent). */
+  to?: Contact[];
+  /** A draft's fields as typed (the To line may not parse yet), and the message it replies to. */
+  draft?: { to: string; replyTo?: number };
   /** Messages with the same thread are one conversation (default: the message's own id). */
   thread?: number;
 }
@@ -182,19 +191,19 @@ export function sampleMessages(): Message[] {
       body: ["Items due: The Overstory; A Pattern Language.", "Renew online or at any branch."],
     }),
     // Elsewhere: sent, archived, snoozed. Some are earlier messages of the conversations above.
-    msg({ account: "work", folder: "sent", thread: 102, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(3), subject: "Sync latency investigation", body: ["Mira — could you look into where the p95 is coming from? Happy to pair on it."] }),
+    msg({ account: "work", folder: "sent", thread: 102, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, to: [{ name: "Mira Kowalski", email: "mira@northwind.dev" }], date: ago(3), subject: "Sync latency investigation", body: ["Mira — could you look into where the p95 is coming from? Happy to pair on it."] }),
     msg({
       account: "work", folder: "archive", thread: 103, from: { name: "Jonas Weber", email: "jonas@acme.io" }, date: ago(8, 2), labels: ["finance"],
       subject: "Renewal terms for 2027",
       body: ["Hi Sam,", "Our contract is up for renewal in January. Before we talk numbers, could you send over our usage for the last twelve months?", "Best,\nJonas"],
     }),
-    msg({ account: "work", folder: "sent", thread: 103, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(5), subject: "Re: Renewal terms for 2027", body: ["Hi Jonas, usage for the last twelve months is attached: 212 active seats on average, peaking at 240 in September.", "Happy to walk through it on a call."] }),
+    msg({ account: "work", folder: "sent", thread: 103, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, to: [{ name: "Jonas Weber", email: "jonas@acme.io" }], date: ago(5), subject: "Re: Renewal terms for 2027", body: ["Hi Jonas, usage for the last twelve months is attached: 212 active seats on average, peaking at 240 in September.", "Happy to walk through it on a call."] }),
     msg({
       account: "work", folder: "archive", thread: 101, from: { name: "Priya Shah", email: "priya@northwind.dev" }, date: ago(4, 6), labels: ["design"],
       subject: "Onboarding flow: first pass",
       body: ["First pass at the new onboarding is in the shared file. Rough around the edges, but the structure is there.", "Main question for now: should the workspace picker come before or after sign-in?"],
     }),
-    msg({ account: "work", folder: "sent", thread: 101, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, date: ago(4, 3), subject: "Re: Onboarding flow: first pass", body: ["After, I think. Nobody should see an empty picker on day one."] }),
+    msg({ account: "work", folder: "sent", thread: 101, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, to: [{ name: "Priya Shah", email: "priya@northwind.dev" }], date: ago(4, 3), subject: "Re: Onboarding flow: first pass", body: ["After, I think. Nobody should see an empty picker on day one."] }),
     msg({ account: "work", folder: "archive", from: { name: "Daniel Okafor", email: "daniel@northwind.dev" }, date: ago(12), subject: "Q3 retro notes", body: ["Notes from the retro are in the wiki."] }),
     msg({ account: "personal", folder: "snoozed", snoozedUntil: "Tomorrow, 08:00", from: { name: "Alex Kim", email: "alex.kim@hey.com" }, date: ago(1, 9), subject: "Plant-sitting next weekend?", body: ["Could you water the plants while we're away? Keys are under the blue pot."] }),
   ];
