@@ -72,9 +72,9 @@ function createScroll() {
   let content: Node | undefined;
   /**
    * Measures the content and the viewport again. Called after anything that
-   * changes them that the app knows about. Workaround: apps aren't told when
-   * the window resizes (see docs/upstream.md, "Resize events"), so after a
-   * resize the extent is stale until the next wheel or change.
+   * changes them that the app knows about. Workaround for dunkbing/mantou#3:
+   * apps aren't told when the window resizes, so after a resize the extent is
+   * stale until the next wheel or change.
    */
   const height = (n: Node | undefined) => (n && !n.released ? (n.measure()?.height ?? 0) : 0); // a <Show> may have released them
   const measure = () => {
@@ -102,8 +102,8 @@ const RELATIVE = { position: "relative" } as const;
  * A thin scrollbar thumb, while the content is taller than its viewport. The
  * viewport needs `position: "relative"` (RELATIVE below). Workaround: Mantou
  * documents relative as the default, but its core leaves Taffy's default
- * (static), so `right`/`bottom` resolve against the window without it (see
- * docs/upstream.md, "Absolute insets").
+ * (static), so `right`/`bottom` resolve against the window without it.
+ * Workaround for dunkbing/mantou#1.
  */
 function ScrollThumb(props: { scroll: Scroll }) {
   const thumb = () => {
@@ -139,9 +139,10 @@ function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; count?
 }
 
 /**
- * The search field. Workaround: Mantou has no text input yet (see
- * docs/upstream.md, "Text input"), so the query is typed through onKey and
- * drawn as text with a caret: no selection, no cursor movement, no IME, no paste.
+ * The search field. Workaround: the pinned mantou-ui has no text input, so
+ * the query is typed through onKey and drawn as text with a caret: no
+ * selection, no cursor movement, no IME, no paste. Mantou has <Input> since
+ * 92ed187; move to it when updating mantou-ui (docs/upstream.md, "Text input").
  */
 function SearchField(props: { mail: Mail }) {
   const m = props.mail;

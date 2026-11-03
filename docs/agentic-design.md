@@ -180,13 +180,13 @@ Some of these needs are already in `docs/upstream.md`. The rest are new feature 
 
 | Need | Priority | Unblocks | Today |
 | --- | --- | --- | --- |
-| Text input: single-line, then multi-line with selection, IME and clipboard | Blocking (phase 2) | Compose, real replies, agent chat, rule editor, search | Search typed through `onKey` (docs/upstream.md, "Text input") |
+| Text input: single-line, then multi-line with selection, IME and clipboard | Shipped upstream (`92ed187`); update mantou-ui | Compose, real replies, agent chat, rule editor, search | Search typed through `onKey` on the pinned commit |
 | Core-driven scrolling and a virtualised list | Blocking (phase 1) | Mailboxes with 50,000 messages, long threads | Wheel plus negative margins; every row is a node |
 | Rich text: spans, links, inline styles | Blocking (phase 1) | Showing HTML mail (converted to a safe subset), clickable links | Plain text paragraphs |
 | Images | High | Inline images, avatars, logos | Initials in coloured circles |
 | Open URL / file, and file dialogs | High | OAuth sign-in in the browser, links, saving attachments | None |
 | Focus and keyboard navigation | High | Composer vs shortcuts, accessibility | A `searching` flag decides who gets keys |
-| Resize and layout events | Medium | Responsive layout, correct scroll limits | Measure again on wheel (docs/upstream.md, "Resize events") |
+| Resize and layout events | Medium | Responsive layout, correct scroll limits | Measure again on wheel ([dunkbing/mantou#3](https://github.com/dunkbing/mantou/issues/3)) |
 | Hover and cursor shapes | Medium | Row actions on hover, links that look clickable | None |
 | Menus and context menus | Medium | Right-click on a message, app menu, shortcut discovery | `?` overlay |
 | Multiple windows | Medium | Compose in its own window | None |
@@ -218,7 +218,7 @@ flowchart LR
   P4["4 · Autonomy<br/>standing rules, follow-ups,<br/>scheduling, cleanup"]
   P5["5 · 1.0<br/>notifications, accessibility,<br/>Windows/Linux packages"]
   P0 --> P1 -->|"gate: Mantou virtual list<br/>+ rich text"| P2
-  P2 -->|"gate: Mantou text input"| P3
+  P2 -->|"gate: composer on Mantou's Input"| P3
   P3 -->|"gate: injection suite 0 unsafe,<br/>triage precision ≥ 95%"| P4
   P4 -->|"gate: 30 days of rules<br/>with no unwanted send"| P5
 ```
@@ -226,7 +226,7 @@ flowchart LR
 | Phase | Ships | Mantou work it waits on |
 | --- | --- | --- |
 | 1 Real mail, read-only | One IMAP or Gmail account, read, archive, label, search, offline | Virtualised list, rich text, open URL (for OAuth) |
-| 2 Compose and send | Composer, replies, forwards, attachments, Undo Send, Send Later | Text input (multi-line), file dialogs, focus |
+| 2 Compose and send | Composer, replies, forwards, attachments, Undo Send, Send Later | File dialogs (text input and focus are upstream since `92ed187`) |
 | 3 Agent v1 | Summaries, Write with AI, Sound Like Me, Ask, triage proposals, Queue, activity log, MCP server | Nothing new |
 | 4 Autonomy | Standing rules, follow-ups, scheduling, subscription cleanup, memory page | Menus, notifications |
 | 5 1.0 | Several accounts per provider type, local models, accessibility, signed packages for three OSes | Accessibility, multiple windows |

@@ -11,7 +11,7 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 | `src/App.tsx` | The UI: sidebar and search field, toolbar and tabs, message list, reader (the whole conversation) and its panels, status bar, shortcuts overlay; keyboard handling |
 | `src/main.tsx` | Entry: `run(() => <App />)` |
 | `tests/` | Bun tests on a headless instance of Mantou's real core |
-| `docs/upstream.md` | What the app needs from Mantou: bugs and feature requests, ready to file, with the workaround in use |
+| `docs/upstream.md` | What the app needs from Mantou: the issues filed (and drafts of any not yet filed), with the workaround in use |
 
 ## Commands
 
@@ -30,9 +30,9 @@ bun run typecheck    # bun check
 - JSX is compiled by Mantou's plugin: `tsconfig.json` has `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; `bunfig.toml` preloads `mantou-ui/preload` for tests; `mantou run` registers it for the app.
 - Read Mantou's docs before building something: https://mantou.dunkbing.dev (LLM-friendly: `/llms.txt`, `/llms-full.txt`, any page as `.md`). Its `AGENTS.md` has the framework's rules.
 
-What Mantou can do today: `<View>` and `<Text>`, flexbox layout, text with `maxLines` ellipsis, rounded corners and borders, `overflow: "hidden"` clipping, `onPress`, `onWheel`, `onKey`, `node.measure()`, `position: "absolute"` (overlays, scrollbar thumbs), shared styles (`defineStyle`), Solid's `For`/`Index`/`Show`/`Switch`. Not yet: text input (so no compose; search is typed through `onKey`), resize events, images, shadows, core-driven scrolling (the app scrolls with the wheel and negative margins), hover, focus, drag and drop, menus, multiple windows, accessibility, real mail accounts (would need networking and storage on top of Bun).
+What Mantou can do today: `<View>` and `<Text>`, flexbox layout, text with `maxLines` ellipsis, rounded corners and borders, `overflow: "hidden"` clipping, `onPress`, `onWheel`, `onKey`, `node.measure()`, `position: "absolute"` (overlays, scrollbar thumbs), shared styles (`defineStyle`), Solid's `For`/`Index`/`Show`/`Switch`. Not yet in the pinned commit: text input (Mantou's `main` has `<Input>` since `92ed187`; until the app updates, search is typed through `onKey`), resize events (dunkbing/mantou#3), images, shadows, core-driven scrolling (the app scrolls with the wheel and negative margins), hover, focus, drag and drop, menus, multiple windows, accessibility, real mail accounts (would need networking and storage on top of Bun).
 
-Layout is CSS flexbox, with its sharp edges: `flexShrink` defaults to 1 (fixed-size parts need `flexShrink: 0`), and flex items are at least as tall as their content unless they clip (scroll containers' ancestors need `minHeight: 0`, and a region whose height should come from the window rather than from its scrolled content needs `flexBasis: 0`). An absolutely positioned view that uses `right` or `bottom` needs a parent with an explicit `position: "relative"` for now (docs/upstream.md, "Absolute insets").
+Layout is CSS flexbox, with its sharp edges: `flexShrink` defaults to 1 (fixed-size parts need `flexShrink: 0`), and flex items are at least as tall as their content unless they clip (scroll containers' ancestors need `minHeight: 0`, and a region whose height should come from the window rather than from its scrolled content needs `flexBasis: 0`). An absolutely positioned view that uses `right` or `bottom` needs a parent with an explicit `position: "relative"` for now (dunkbing/mantou#1).
 
 ## Reporting to Mantou
 
