@@ -9,11 +9,12 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 | `src/data.ts` | The data types (`Message`, `Account`), the clock (`now()`: fixed in tests, real in the app), and sample mail for when no account is set up |
 | `src/state.ts` | Solid signals and actions (select, move, archive, move to inbox, delete, snooze, labels, star, unread, search, drafts, compose and send, undo); parsing To lines. Knows nothing of views or servers: `onChange(prev, next)` reports the user's changes, `receive()` takes the servers' messages |
 | `src/App.tsx` | The app: layout and keyboard handling |
-| `src/ui/` | The UI, a file per part: `Sidebar`, `Toolbar`, `MessageList`, `Reader` (conversation, reply/snooze/label panel), `Compose` (reply and new-message composers), `Accounts` (the Accounts dialog), `StatusBar`, `Shortcuts`; `common` (avatars, chips, buttons), `scroll` (scroll areas), `theme` (colours, shared styles) |
+| `src/ui/` | The UI, a file per part: `Sidebar`, `Toolbar`, `MessageList`, `Reader` (conversation, reply/snooze/label panel), `Compose` (reply and new-message composers), `Accounts` (the Accounts dialog), `StatusBar`, `Shortcuts`; `common` (avatars, chips, buttons), `icons` (the icon set: use `<Icon name>`, don't draw icons inline), `scroll` (scroll areas), `theme` (colours, shared styles) |
 | `src/mail/` | Real accounts: `remote` (accounts, passwords, the bridge to the state), `imap` (one account's sync over IMAP, with imapflow), `store` (the local copy, SQLite), `parse` (raw mail to `Message`), `providers` (settings guessed from an address), `secrets` (the OS keychain), `paths` (the data folder) |
 | `src/main.tsx` | Entry: the store, the accounts, then `run(() => <App />)` |
 | `tests/` | Bun tests on a headless instance of Mantou's real core; real accounts against an IMAP server in the test process (`tests/server.ts`, hoodiecrow) |
 | `scripts/` | `demo-server`: an IMAP server with the sample mail, to try real accounts locally |
+| `bench/` | `bun run perf`: what the common interactions cost (time, ops, layouts, nodes), sample and 2,000-message mailboxes; results in `docs/performance.md` |
 | `docs/upstream.md` | What the app needs from Mantou: the issues filed (and drafts of any not yet filed), with the workaround in use |
 
 ## Commands
@@ -24,6 +25,7 @@ bun run dev          # the app in a window (on headless Linux: xvfb-run -a bun r
 bun run demo-server  # an IMAP server on 127.0.0.1:1143 with the sample mail (testuser / testpass)
 bun test             # headless tests (captures need a GPU adapter; Mesa's lavapipe is fine)
 bun run typecheck    # bun check
+bun run perf         # interaction costs on the real core (not part of bun test)
 ```
 
 ## How the app uses Mantou
@@ -52,4 +54,4 @@ When Mantou ships a fix: `bun add mantou-ui@<version>` (exact version), run the 
 
 ## Before you finish
 
-Run `bun run typecheck && bun test`. Real-account tests wait for conditions (`until` in `tests/server.ts`), never for a time. If you changed what the app looks like, check it with a headless capture or in a window, and update `docs/screenshot.png` when the change is visible.
+Run `bun run typecheck && bun test`. If you changed what's on screen or how much of it there is, run `bun run perf` and compare with `docs/performance.md`; a cost that's Mantou's is an upstream issue (with the measurement), like dunkbing/mantou#9. Real-account tests wait for conditions (`until` in `tests/server.ts`), never for a time. If you changed what the app looks like, check it with a headless capture or in a window, and update `docs/screenshot.png` when the change is visible.

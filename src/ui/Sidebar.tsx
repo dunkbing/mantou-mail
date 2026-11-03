@@ -4,18 +4,24 @@ import { LABELS } from "../data";
 import { sameMailbox, type Mail, type Mailbox } from "../state";
 import { C, caption } from "./theme";
 import { Kbd, dialogFocus } from "./common";
+import { Icon, type IconName } from "./icons";
 import { STATE_COLOR } from "./Accounts";
 import type { Remote } from "../mail/remote";
 
-export function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; count?: number; dot?: string; indent?: boolean }) {
+export function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; icon?: IconName; count?: number; dot?: string; indent?: boolean }) {
   const active = () => sameMailbox(props.mail.mailbox(), props.mailbox);
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 30, paddingLeft: props.indent ? 22 : 10, paddingRight: 10, borderRadius: 6, backgroundColor: active() ? C.accentSoft : "transparent" }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 10, height: 30, paddingLeft: props.indent ? 36 : 10, paddingRight: 10, borderRadius: 6, backgroundColor: active() ? C.accentSoft : "transparent" }}
       onPress={() => props.mail.open(props.mailbox)}
     >
+      <Show when={props.icon}>
+        <Icon name={props.icon!} color={active() ? C.accent : C.secondary} />
+      </Show>
       <Show when={props.dot}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: props.dot ?? "transparent" }} />
+        <View style={{ width: props.indent ? 8 : 16, height: 8, flexShrink: 0, alignItems: "center" }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: props.dot ?? "transparent" }} />
+        </View>
       </Show>
       <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 13, fontWeight: active() ? 600 : 500, color: active() ? C.accent : C.text, maxLines: 1 }}>{props.name}</Text>
       <Show when={(props.count ?? 0) > 0}>
@@ -34,9 +40,10 @@ export function SearchField(props: { mail: Mail; ref: (n: Node) => void }) {
   let input: Node | undefined;
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, flexShrink: 0, marginBottom: 12, paddingLeft: 4, paddingRight: 8, borderRadius: 7, borderWidth: 1, borderColor: m.searching() ? C.accent : C.line, backgroundColor: "#ffffff" }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 4, height: 32, flexShrink: 0, marginBottom: 12, paddingLeft: 10, paddingRight: 8, borderRadius: 7, borderWidth: 1, borderColor: m.searching() ? C.accent : C.line, backgroundColor: "#ffffff" }}
       onPress={() => input?.focus()}
     >
+      <Icon name="search" size={14} color={m.searching() ? C.accent : C.muted} />
       <Input
         ref={(n) => props.ref((input = n))}
         value={m.query()}
@@ -74,11 +81,12 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
         style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 34, flexShrink: 0, marginBottom: 10, borderRadius: 7, backgroundColor: C.accent }}
         onPress={() => m.compose()}
       >
+        <Icon name="plus" size={14} color="#ffffff" />
         <Text style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Compose</Text>
         <Text style={{ fontSize: 11, fontWeight: 600, color: "#c7d2fe" }}>C</Text>
       </View>
       <SearchField mail={m} ref={props.searchRef} />
-      <SidebarItem mail={m} mailbox={{ kind: "all" }} name="All inboxes" count={m.unread({ kind: "all" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "all" }} name="All inboxes" icon="inboxes" count={m.unread({ kind: "all" })} />
       <For each={m.accounts()}>
         {(a) => {
           // A dot for an account that isn't up to date (syncing, offline, needs its password).
@@ -90,20 +98,18 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
         }}
       </For>
       <Show when={props.remote}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 28, paddingLeft: 22, paddingRight: 10, borderRadius: 6 }} onPress={props.onAccounts}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 28, paddingLeft: 36, paddingRight: 10, borderRadius: 6 }} onPress={props.onAccounts}>
+          <Icon name={m.accounts()[0]?.sample ? "plus" : "person"} size={12} color={m.accounts()[0]?.sample ? C.accent : C.muted} />
           <Text style={{ flexShrink: 1, fontSize: 12, fontWeight: 500, color: m.accounts()[0]?.sample ? C.accent : C.muted, maxLines: 1 }}>{m.accounts()[0]?.sample ? "Add your account" : "Manage accounts"}</Text>
-          <Show when={m.accounts()[0]?.sample}>
-            <Text style={{ flexShrink: 0, fontSize: 11, color: C.muted }}>sample mail</Text>
-          </Show>
         </View>
       </Show>
       <View style={{ height: 10 }} />
-      <SidebarItem mail={m} mailbox={{ kind: "starred" }} name="Starred" count={m.count({ kind: "starred" })} />
-      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "snoozed" }} name="Snoozed" count={m.count({ kind: "folder", folder: "snoozed" })} />
-      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "drafts" }} name="Drafts" count={m.count({ kind: "folder", folder: "drafts" })} />
-      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "sent" }} name="Sent" />
-      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "archive" }} name="Archive" />
-      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "trash" }} name="Trash" count={m.count({ kind: "folder", folder: "trash" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "starred" }} name="Starred" icon="starOutline" count={m.count({ kind: "starred" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "snoozed" }} name="Snoozed" icon="clock" count={m.count({ kind: "folder", folder: "snoozed" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "drafts" }} name="Drafts" icon="doc" count={m.count({ kind: "folder", folder: "drafts" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "sent" }} name="Sent" icon="sent" />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "archive" }} name="Archive" icon="archive" />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "trash" }} name="Trash" icon="trash" count={m.count({ kind: "folder", folder: "trash" })} />
       <View style={{ height: 16 }} />
       <Text style={[caption, { paddingLeft: 10, paddingBottom: 6 }]}>LABELS</Text>
       <For each={LABELS}>

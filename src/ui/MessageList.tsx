@@ -1,10 +1,11 @@
 // The message list: a row per message, scrolled with the wheel.
-import { For, Show, Text, View, createEffect, on, onCleanup, type Node } from "mantou-ui";
+import { For, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, type Node } from "mantou-ui";
 import { daysSince, shortDate, type Message } from "../data";
 import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
 import { RELATIVE, createScroll, ScrollThumb } from "./scroll";
+import { Icon, type IconName } from "./icons";
 
 export const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
 
@@ -73,8 +74,19 @@ export function EmptyList(props: { mail: Mail }) {
     if (usesTabs(box)) return ["You're all caught up", m.tab() === "important" ? "Nothing left in Important." : "Nothing left in Other."];
     return ["Nothing here", ""];
   };
+  const icon = (): IconName => {
+    const box = m.mailbox();
+    if (box.kind === "search") return "search";
+    if (box.kind === "folder") return ({ snoozed: "clock", drafts: "doc", sent: "sent", archive: "archive", trash: "trash" } as const)[box.folder];
+    if (box.kind === "starred") return "starOutline";
+    if (box.kind === "label") return "tag";
+    return "check";
+  };
   return (
     <View style={{ paddingTop: 56, paddingLeft: 32, paddingRight: 32, gap: 6, alignItems: "center" }}>
+      <View style={{ width: 64, height: 64, borderRadius: 32, marginBottom: 10, backgroundColor: C.faint, justifyContent: "center", alignItems: "center" }}>
+        <Icon name={icon()} size={30} color={C.muted} />
+      </View>
       <Text style={{ fontSize: 15, fontWeight: 600, color: C.text, textAlign: "center" }}>{text()[0]}</Text>
       <Show when={text()[1]}>
         <Text style={[small, { textAlign: "center", lineHeight: 1.5 }]}>{text()[1]}</Text>
@@ -83,10 +95,29 @@ export function EmptyList(props: { mail: Mail }) {
   );
 }
 
+/**
+ * Rows are rendered a page at a time, more as the scroll nears the end of
+ * what's rendered (and always as far as the selection). Workaround for
+ * dunkbing/mantou#5 (a virtualised list): rendering every row of a big
+ * mailbox costs about 8 nodes and 53 ops a row.
+ */
+export const PAGE = 60;
+
 export function MessageList(props: { mail: Mail }) {
   const m = props.mail;
   const scroll = createScroll();
   const rows = new Map<number, Node>();
+  const [limit, setLimit] = createSignal(PAGE);
+  const shown = createMemo(() => {
+    const list = m.list(), s = m.selected();
+    const at = s ? list.indexOf(s) : -1;
+    return list.slice(0, Math.max(limit(), at + 1 + PAGE / 4));
+  });
+  createEffect(on([scroll.y, scroll.extent], () => {
+    const e = scroll.extent();
+    if (shown().length < m.list().length && scroll.y() + 2 * e.viewport >= e.content) setLimit(shown().length + PAGE);
+  }));
+  createEffect(on([m.mailbox, m.tab], () => setLimit(PAGE)));
   // Keep the selected row in view (scrollIntoView, once dunkbing/mantou#5 has it).
   createEffect(() => {
     const s = m.selected();
@@ -98,11 +129,11 @@ export function MessageList(props: { mail: Mail }) {
     else if (top + row.height > vp.height) scroll.by(top + row.height - vp.height);
   });
   createEffect(on([m.mailbox, m.tab], () => scroll.to(0)));
-  createEffect(on(m.list, () => scroll.to(scroll.y())));
+  createEffect(on(shown, () => scroll.to(scroll.y())));
   return (
     <View ref={scroll.viewportRef} style={{ ...RELATIVE, width: 400, flexShrink: 0, overflow: "hidden", backgroundColor: "#ffffff" }} onWheel={(e) => scroll.by(e.dy)}>
       <View ref={scroll.contentRef} style={{ marginTop: -scroll.y() }}>
-        <For each={m.list()} fallback={<EmptyList mail={m} />}>
+        <For each={shown()} fallback={<EmptyList mail={m} />}>
           {(msg) => {
             let node: Node | undefined;
             onCleanup(() => rows.get(msg.id) === node && rows.delete(msg.id));

@@ -4,6 +4,7 @@ import { type Mail } from "../state";
 import { C, small } from "./theme";
 import { Kbd } from "./common";
 import { STATE_COLOR } from "./Accounts";
+import { Icon } from "./icons";
 import type { Remote } from "../mail/remote";
 import type { SyncStatus } from "../mail/imap";
 
@@ -32,6 +33,7 @@ export function StatusBar(props: { mail: Mail; remote?: Remote; onHelp: () => vo
         </View>
       </Show>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 22, flexShrink: 0, paddingLeft: 6, paddingRight: 4 }} onPress={props.onHelp}>
+        <Icon name="keyboard" size={14} color={C.muted} />
         <Text style={small}>Keyboard shortcuts</Text>
         <Kbd text="?" />
       </View>

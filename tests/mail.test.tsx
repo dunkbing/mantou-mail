@@ -5,6 +5,8 @@ import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
 import { createMail, parseRecipients, type Mail } from "../src/state";
+import { sampleMessages } from "../src/data";
+import { PAGE } from "../src/ui/MessageList";
 
 const open: HeadlessCore[] = [];
 afterEach(() => open.splice(0).forEach((h) => h.free()));
@@ -367,6 +369,29 @@ test("scrolling moves only the list: the status bar stays put, and the scrollbar
   expect(thumb[2]).toBeLessThanOrEqual(629); // the list's right edge
   expect(thumb[0]).toBeGreaterThan(600);
   expect(thumb[1]).toBeGreaterThan(53);
+});
+
+test("a big mailbox renders a page of rows at a time: more as the scroll nears the end, and always the selection", () => {
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  open.push(h);
+  const base = sampleMessages().filter((m) => m.folder === "inbox" && m.important);
+  const many = Array.from({ length: 300 }, (_, i) => ({ ...base[i % base.length], id: i + 1, thread: undefined, subject: `Message ${i + 1}`, date: new Date(Date.UTC(2026, 10, 3) - i * 3_600_000) }));
+  let mail!: Mail;
+  mount(h.ui, () => {
+    mail = createMail(many);
+    return <App mail={mail} />;
+  });
+  h.step();
+  const rendered = () => texts(h).filter((t) => /^Message \d+$/.test(t)).length - 1; // the reader shows the selected one too
+  expect(rendered()).toBe(PAGE);
+  for (let i = 0; i < 30; i++) h.wheel(400, 400, 600);
+  expect(rendered()).toBeGreaterThan(PAGE);
+  for (let i = 0; i < 200; i++) h.key("j");
+  expect(mail.selected()!.subject).toBe("Message 201");
+  expect(texts(h).filter((t) => t === "Message 201").length).toBe(2); // its row is there, with the reader
+  h.key("2");
+  h.key("1");
+  expect(rendered()).toBe(PAGE); // a new mailbox starts again from one page
 });
 
 test("it draws: sidebar, accent, text", () => {

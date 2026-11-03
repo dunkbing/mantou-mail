@@ -48,4 +48,6 @@ bun run demo-server
 bun test
 ```
 
+`bun run perf` measures what the common interactions cost on the real core; the numbers are in [docs/performance.md](docs/performance.md).
+
 The tests run the app on a headless instance of Mantou's real core: layout, presses, keys, the wheel and captured pixels, with no window. Real accounts are tested against an IMAP server in the test process ([hoodiecrow](https://github.com/postalsys/hoodiecrow-imap)): the first sync, changes reaching the server, new mail over IDLE, and the saved copy.

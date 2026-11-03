@@ -8,7 +8,8 @@
     "dev": "mantou run src/main.tsx --width 1200 --height 760 --title \"Mantou Mail\"",
     "test": "bun test",
     "typecheck": "bun check",
-    "demo-server": "bun scripts/demo-server.ts"
+    "demo-server": "bun scripts/demo-server.ts",
+    "perf": "bun test ./bench/perf.bench.tsx"
   },
   "dependencies": {
     "imapflow": "2.10.0",
