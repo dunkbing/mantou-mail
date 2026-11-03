@@ -180,7 +180,7 @@ Some of these needs are already in `docs/upstream.md`. The rest are new feature 
 
 | Need | Priority | Unblocks | Today |
 | --- | --- | --- | --- |
-| Text input: single-line, then multi-line with selection, IME and clipboard | Shipped upstream (`92ed187`); update mantou-ui | Compose, real replies, agent chat, rule editor, search | Search typed through `onKey` on the pinned commit |
+| Text input: single-line, then multi-line with selection, IME and clipboard | Available in mantou-ui 0.1.1 | Compose, real replies, agent chat, rule editor, search | Search still typed through `onKey`; move it to `<Input>` |
 | Core-driven scrolling and a virtualised list | Blocking (phase 1) | Mailboxes with 50,000 messages, long threads | Wheel plus negative margins; every row is a node |
 | Rich text: spans, links, inline styles | Blocking (phase 1) | Showing HTML mail (converted to a safe subset), clickable links | Plain text paragraphs |
 | Images | High | Inline images, avatars, logos | Initials in coloured circles |
@@ -226,7 +226,7 @@ flowchart LR
 | Phase | Ships | Mantou work it waits on |
 | --- | --- | --- |
 | 1 Real mail, read-only | One IMAP or Gmail account, read, archive, label, search, offline | Virtualised list, rich text, open URL (for OAuth) |
-| 2 Compose and send | Composer, replies, forwards, attachments, Undo Send, Send Later | File dialogs (text input and focus are upstream since `92ed187`) |
+| 2 Compose and send | Composer, replies, forwards, attachments, Undo Send, Send Later | File dialogs (text input and focus are in 0.1.1) |
 | 3 Agent v1 | Summaries, Write with AI, Sound Like Me, Ask, triage proposals, Queue, activity log, MCP server | Nothing new |
 | 4 Autonomy | Standing rules, follow-ups, scheduling, subscription cleanup, memory page | Menus, notifications |
 | 5 1.0 | Several accounts per provider type, local models, accessibility, signed packages for three OSes | Accessibility, multiple windows |

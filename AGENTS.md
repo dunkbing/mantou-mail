@@ -16,8 +16,7 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 ## Commands
 
 ```bash
-bun install          # also fetches mantou-ui from GitHub, pinned in package.json / bun.lock
-bun run setup        # builds Mantou's native core (cargo, ~3 min); again after updating mantou-ui
+bun install          # mantou-ui from npm, pinned in package.json / bun.lock, with a prebuilt native core
 bun run dev          # the app in a window (on headless Linux: xvfb-run -a bun run dev)
 bun test             # headless tests (captures need a GPU adapter; Mesa's lavapipe is fine)
 bun run typecheck    # bun check
@@ -25,12 +24,12 @@ bun run typecheck    # bun check
 
 ## How the app uses Mantou
 
-- `mantou-ui` is a git dependency (`github:dunkbing/mantou#<commit>`). Don't edit `node_modules/mantou-ui`; anything that needs changing there is an upstream issue.
+- `mantou-ui` is an npm package pinned to an exact version (`0.1.1`). Its native core comes prebuilt in a per-platform optional dependency (`mantou-ui-linux-x64` and so on); only on a platform without one would `bunx mantou build-core` (needs Rust) build it from source. Don't edit `node_modules/mantou-ui`; anything that needs changing there is an upstream issue.
 - Import everything from `mantou-ui` (components, `createSignal` and the rest of Solid's API, `defineStyle`), `mantou-ui/headless` (tests) and `mantou-ui/mock`. **Never import `solid-js` directly**: Bun resolves it to Solid's server build, which has no reactivity.
 - JSX is compiled by Mantou's plugin: `tsconfig.json` has `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; `bunfig.toml` preloads `mantou-ui/preload` for tests; `mantou run` registers it for the app.
 - Read Mantou's docs before building something: https://mantou.dunkbing.dev (LLM-friendly: `/llms.txt`, `/llms-full.txt`, any page as `.md`). Its `AGENTS.md` has the framework's rules.
 
-What Mantou can do today: `<View>` and `<Text>`, flexbox layout, text with `maxLines` ellipsis, rounded corners and borders, `overflow: "hidden"` clipping, `onPress`, `onWheel`, `onKey`, `node.measure()`, `position: "absolute"` (overlays, scrollbar thumbs), shared styles (`defineStyle`), Solid's `For`/`Index`/`Show`/`Switch`. Not yet in the pinned commit: text input (Mantou's `main` has `<Input>` since `92ed187`; until the app updates, search is typed through `onKey`), resize events (dunkbing/mantou#3), images, shadows, core-driven scrolling (the app scrolls with the wheel and negative margins), hover, focus, drag and drop, menus, multiple windows, accessibility, real mail accounts (would need networking and storage on top of Bun).
+What Mantou can do today: `<View>` and `<Text>`, flexbox layout, text with `maxLines` ellipsis, rounded corners and borders, `overflow: "hidden"` clipping, `onPress`, `onWheel`, `onKey`, `node.measure()`, `position: "absolute"` (overlays, scrollbar thumbs), shared styles (`defineStyle`), Solid's `For`/`Index`/`Show`/`Switch`. Also available, not used yet: `<Input>` (text input; search is still typed through `onKey`, see docs/upstream.md). Not yet: resize events (dunkbing/mantou#3), images, shadows, core-driven scrolling (the app scrolls with the wheel and negative margins), hover, focus, drag and drop, menus, multiple windows, accessibility, real mail accounts (would need networking and storage on top of Bun).
 
 Layout is CSS flexbox, with its sharp edges: `flexShrink` defaults to 1 (fixed-size parts need `flexShrink: 0`), and flex items are at least as tall as their content unless they clip (scroll containers' ancestors need `minHeight: 0`, and a region whose height should come from the window rather than from its scrolled content needs `flexBasis: 0`). An absolutely positioned view that uses `right` or `bottom` needs a parent with an explicit `position: "relative"` for now (dunkbing/mantou#1).
 
@@ -43,7 +42,7 @@ Open issues in **dunkbing/mantou** with its templates (https://github.com/dunkbi
 
 With the GitHub CLI: `gh issue create --repo dunkbing/mantou --template bug_report.md` (or `feature_request.md`). One issue per problem; search first (`gh issue list --repo dunkbing/mantou --search "..."`) and add to an existing one rather than duplicating it. Link the issue from a comment next to any workaround in this repo (`// Workaround for dunkbing/mantou#12`) so it's easy to remove later. If you can't file it yourself, write it up in `docs/upstream.md` (ready to paste into the template) and point the comment there; whoever files it replaces the pointer with the issue number.
 
-When Mantou ships a fix: `bun update mantou-ui` (or set the new commit in `package.json`), `bun run setup`, run the tests, remove the workaround.
+When Mantou ships a fix: `bun add mantou-ui@<version>` (exact version), run the tests, remove the workaround. The bug report's "mantou-ui commit" is the package version (and the commit, if you know it).
 
 ## Before you finish
 

@@ -10,14 +10,10 @@ Conversations, Important/Other tabs, labels, snooze, search, quick replies and u
 
 ## Run it
 
-Needs [Bun](https://bun.sh) 1.4.4 and [Rust](https://rustup.rs) (to build Mantou's native core once).
+Needs [Bun](https://bun.sh) 1.4.4. `mantou-ui` comes from npm with a prebuilt native core for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), so there's nothing to compile.
 
 ```bash
 bun install
-```
-
-```bash
-bun run setup
 ```
 
 ```bash

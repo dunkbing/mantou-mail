@@ -139,10 +139,10 @@ function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; count?
 }
 
 /**
- * The search field. Workaround: the pinned mantou-ui has no text input, so
- * the query is typed through onKey and drawn as text with a caret: no
- * selection, no cursor movement, no IME, no paste. Mantou has <Input> since
- * 92ed187; move to it when updating mantou-ui (docs/upstream.md, "Text input").
+ * The search field. The query is typed through onKey and drawn as text with
+ * a caret: no selection, no cursor movement, no IME, no paste. It predates
+ * Mantou's <Input> (in mantou-ui 0.1.1) and should move to it
+ * (docs/upstream.md, "Text input").
  */
 function SearchField(props: { mail: Mail }) {
   const m = props.mail;

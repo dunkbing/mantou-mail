@@ -5,7 +5,7 @@
     "": {
       "name": "mantou-mail",
       "dependencies": {
-        "mantou-ui": "github:dunkbing/mantou#d253daa060eb914e2441bb71c70f153baa1d44db",
+        "mantou-ui": "0.1.1",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -119,7 +119,17 @@
 
     "lru-cache": ["lru-cache@5.1.1", "", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
 
-    "mantou-ui": ["mantou-ui@github:dunkbing/mantou#d253daa", { "dependencies": { "@babel/core": "7.29.7", "@babel/preset-typescript": "7.29.7", "babel-preset-solid": "1.9.16", "solid-js": "1.9.18" }, "bin": { "mantou": "./runtime/cli.ts" } }, "dunkbing-mantou-d253daa", "sha512-2OZCXCq5a7MGaUmIERNpR6ZHww920RAEoHaCrLJuUK4u8QSnlUrDYKCLf2s2vt6c0bnq3Tz7bI7oOToGcZlEQg=="],
+    "mantou-ui": ["mantou-ui@0.1.1", "", { "dependencies": { "@babel/core": "7.29.7", "@babel/preset-typescript": "7.29.7", "babel-preset-solid": "1.9.16", "solid-js": "1.9.18" }, "optionalDependencies": { "mantou-ui-darwin-arm64": "0.1.1", "mantou-ui-darwin-x64": "0.1.1", "mantou-ui-linux-arm64": "0.1.1", "mantou-ui-linux-x64": "0.1.1", "mantou-ui-windows-x64": "0.1.1" }, "bin": { "mantou": "runtime/cli.ts" } }, "sha512-L8zzr/kUiXamX2z5qkx2rPbUtuXyFx+7i684tFfYkh6X3YYELZ8yyiGw/v/WZWoX85D8nK9sHV5hHGnPkRxIEw=="],
+
+    "mantou-ui-darwin-arm64": ["mantou-ui-darwin-arm64@0.1.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-30ah92I7XuM3psI5xp4gRg4etnZqS9+N9HmbeR0P4HGAYx+4MyxECr1FO56b5nYd0J/rAGzCE1HY6gyt09C7Ew=="],
+
+    "mantou-ui-darwin-x64": ["mantou-ui-darwin-x64@0.1.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-5MI9qdYcc85qKot+8lmRuBjL/gpiCJVgzmfM4hKpptaoDPoqlA69cqdXddcbLKtRQF3R73NHMJ+cyjVGq8JZ8g=="],
+
+    "mantou-ui-linux-arm64": ["mantou-ui-linux-arm64@0.1.1", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-GIdvDu+e9fynuZaK7E8qlYkuS4ZEtT/4NywLxTSTJkJ/eS9OxF53k8xtLNZyoMwHQOobzkAMF2M80KNZNQ5B+w=="],
+
+    "mantou-ui-linux-x64": ["mantou-ui-linux-x64@0.1.1", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-qMWchakewoI3baKp8FyQoPVdpJ1+Ij4a6Xjr7eJuDLHHnKt7iRcOGhmdF5aVsbGoeihfJcDdoN6wWd2qHlBbdg=="],
+
+    "mantou-ui-windows-x64": ["mantou-ui-windows-x64@0.1.1", "", { "os": "win32", "cpu": "x64" }, "sha512-FwlnxHziN5EpnakZ1IuLYCBYJ9ANXDJd6SET4gmojoZIuNzZe5pipQrR79skULNTw+iz7glwNb7kVULMNOBgXA=="],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 

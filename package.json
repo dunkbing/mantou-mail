@@ -5,13 +5,12 @@
   "description": "A desktop mail client built with Mantou (Bun + TypeScript, native UI)",
   "type": "module",
   "scripts": {
-    "setup": "mantou build-core",
     "dev": "mantou run src/main.tsx --width 1200 --height 760 --title \"Mantou Mail\"",
     "test": "bun test",
     "typecheck": "bun check"
   },
   "dependencies": {
-    "mantou-ui": "github:dunkbing/mantou#d253daa060eb914e2441bb71c70f153baa1d44db"
+    "mantou-ui": "0.1.1"
   },
   "devDependencies": {
     "@types/bun": "1.4.4"
