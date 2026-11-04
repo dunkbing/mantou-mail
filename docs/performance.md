@@ -2,22 +2,22 @@
 
 `bun run perf` (`bench/perf.bench.tsx`) runs the app on Mantou's real core, headless at 1200 × 760, and reports what the common interactions cost. Each time is one interaction's wall time: the app's JS plus the core's layout and scene build, as one headless step. Ops are what JS committed; nodes are the tree's size afterwards. Run it before and after a change to what's on screen, and add the numbers here when they move.
 
-Latest run: 4 November 2026, mantou-ui 0.1.3, Linux, with `<Scroll>` (the core scrolls) and progressive rows.
+Latest run: 4 November 2026, mantou-ui 0.1.7, macOS (Apple M4), with `<Scroll>` (the core scrolls) and progressive rows. Earlier tables were on Linux, so compare the ops, layouts and nodes rather than the times.
 
 | mailbox | interaction | ms | ops | layouts | nodes |
 |---|---|---:|---:|---:|---:|
-| sample (31) | mount | 58 | 2,773 | 1 | 375 |
-| sample (31) | `j` (next message) | 1.7 | 76 | 0.5 | 351 |
-| sample (31) | wheel 120 px | 0.2 | 0 | 0 | 351 |
-| sample (31) | switch mailbox | 6.1 | 1,250 | 1 | 372 |
-| sample (31) | archive + undo | 3.7 | 543 | 2 | 372 |
-| sample (31) | search: type a key | 4.2 | 707 | 1.2 | 178 |
-| 2,000 in inbox | mount | 31 | 7,449 | 1 | 1,068 |
-| 2,000 in inbox | `j` | 5.6 | 180 | 1 | 1,067 |
-| 2,000 in inbox | wheel 120 px | 0.6 | 0 | 0 | 1,067 |
-| 2,000 in inbox | switch mailbox | 19 | 6,586 | 1 | 1,068 |
-| 2,000 in inbox | archive + undo | 8.6 | 488 | 2 | 1,068 |
-| 2,000 in inbox | search: type a key | 10 | 2,382 | 1.2 | 180 |
+| sample (31) | mount | 39.7 | 2,389 | 1 | 325 |
+| sample (31) | `j` (next message) | 0.83 | 80 | 0.5 | 301 |
+| sample (31) | wheel 120 px | 0.11 | 0 | 0 | 301 |
+| sample (31) | switch mailbox | 1.8 | 1,262 | 1 | 322 |
+| sample (31) | archive + undo | 1.5 | 543 | 2 | 322 |
+| sample (31) | search: type a key | 1.3 | 658 | 1.2 | 120 |
+| 2,000 in inbox | mount | 17.9 | 7,131 | 1 | 1,024 |
+| 2,000 in inbox | `j` | 2.3 | 191 | 1 | 1,023 |
+| 2,000 in inbox | wheel 120 px | 0.28 | 0 | 0 | 1,023 |
+| 2,000 in inbox | switch mailbox | 7.4 | 6,682 | 1 | 1,024 |
+| 2,000 in inbox | archive + undo | 3.7 | 500 | 2 | 1,024 |
+| 2,000 in inbox | search: type a key | 4.5 | 2,348 | 1.2 | 122 |
 
 ## What changed it
 
@@ -33,4 +33,4 @@ Attachments and Forward (4 November) added about 8 nodes and 3% more ops at moun
 
 ## What's Mantou's
 
-- **[dunkbing/mantou#31](https://github.com/dunkbing/mantou/issues/31)** (a virtualized list with rows of different heights; 0.1.5's `<List>`, [#19](https://github.com/dunkbing/mantou/issues/19), takes rows of one height): until then, the list renders 60 rows at a time; every rendered row is about 8 nodes and 53 ops. Fixed in 0.1.3: [#9](https://github.com/dunkbing/mantou/issues/9) (text laid out for every node, and the cache past 4,096) and [#5](https://github.com/dunkbing/mantou/issues/5) (scrolling re-laid out the content).
+- **[dunkbing/mantou#50](https://github.com/dunkbing/mantou/issues/50)** (`<List>` with rows of different heights, [#31](https://github.com/dunkbing/mantou/issues/31), is in 0.1.7 but throws when its items get fewer): until then, the list renders 60 rows at a time; every rendered row is about 8 nodes and 53 ops. Fixed in 0.1.3: [#9](https://github.com/dunkbing/mantou/issues/9) (text laid out for every node, and the cache past 4,096) and [#5](https://github.com/dunkbing/mantou/issues/5) (scrolling re-laid out the content).
