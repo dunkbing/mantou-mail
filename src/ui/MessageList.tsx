@@ -24,11 +24,16 @@ export function rowName(mail: Mail, msg: Message) {
   return to ? `To: ${to}` : msg.folder === "drafts" ? "Draft" : msg.from.name;
 }
 
+/**
+ * Shift or Ctrl/⌘ held as the button went down (a press doesn't carry the keys). Shared by all rows:
+ * workaround for dunkbing/mantou#55, where after a context menu the core sends every pointer down to
+ * the row that was right-clicked, not the one under the pointer.
+ */
+let held: "range" | "toggle" | null = null;
+
 export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void; onMenu: (message: Message, e: PointerEvent) => void }) {
   const msg = () => props.message;
   const selected = () => props.mail.selected()?.id === msg().id || props.mail.picked().has(msg().id);
-  /** Shift or Ctrl/⌘ held as the button went down (a press doesn't carry the keys). */
-  let held: "range" | "toggle" | null = null;
   const size = () => props.mail.threadSize(msg());
   /** In mixed lists (labels, starred, search), where a message lives. */
   const folder = () => (props.mail.mailbox().kind === "folder" ? undefined : FOLDER_NAMES[msg().folder]);
