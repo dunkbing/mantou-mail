@@ -40,6 +40,8 @@ export interface SyncHooks {
   expungeDelay?: number;
   /** How many of a folder's newest messages are kept at first, and added by "Load older" (default WINDOW). */
   window?: number;
+  /** Message-IDs of this account's drafts kept here: their copies in the server's Drafts are mirrors, and aren't shown. */
+  localDrafts?(account: string): Set<string>;
   /** The first wait before connecting again, doubled each time (default 2 s; tests make it short). */
   retry?: number;
 }
@@ -384,8 +386,10 @@ export class AccountSync {
   emit() {
     const shown = new Map<string, Message>();
     const out: Message[] = [];
+    const mirrors = this.hooks.localDrafts?.(this.cfg.id) ?? new Set<string>();
     for (const m of this.byId.values()) {
       if (this.deletions.has(m.id)) continue;
+      if (m.folder === "drafts" && m.messageId && mirrors.has(m.messageId)) continue;
       if (!m.messageId) {
         out.push(m);
         continue;
@@ -509,6 +513,29 @@ export class AccountSync {
       if (append) await c.append(path, raw, ["\\Seen"]);
       await this.syncFolder(c, "sent");
       await this.idleOnInbox(c);
+    });
+    this.emit();
+  }
+
+  /**
+   * Keeps a copy of a draft in the server's Drafts: the new one is appended, then the earlier copies (found by
+   * Message-ID) go, so an edit replaces it; without `raw` they just go (sent, discarded). Offline, or with no
+   * Drafts folder, nothing happens: the next save puts it there.
+   */
+  async mirrorDraft(messageId: string, raw?: Buffer) {
+    const c = this.client;
+    const path = this.paths.get("drafts");
+    if (!c || !path) return;
+    await this.run(async () => {
+      const lock = await c.getMailboxLock(path);
+      try {
+        const old = (await c.search({ header: { "message-id": `<${messageId}>` } }, { uid: true })) || [];
+        if (raw) await c.append(path, raw, ["\\Draft", "\\Seen"]);
+        if (old.length) await c.messageDelete(old, { uid: true });
+      } finally {
+        lock.release();
+      }
+      await this.syncFolder(c, "drafts");
     });
     this.emit();
   }

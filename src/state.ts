@@ -291,12 +291,15 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
     const id = d.id ?? nextId();
     const r = recipientsOf(d);
+    // A real account's draft keeps one Message-ID through its edits: the copy on the server is found by it.
+    const messageId = messages().find((m) => m.id === id)?.messageId ?? (accountOf(d.account)?.sample ? undefined : `${crypto.randomUUID()}@${fromAccount(d.account).email.split("@")[1] ?? "mantou.mail"}`);
     const saved: Message = {
       id, account: d.account, folder: "drafts", from: fromAccount(d.account),
       to: r.to, ...(r.cc.length ? { cc: r.cc } : {}), ...(r.bcc.length ? { bcc: r.bcc } : {}),
       subject: d.subject, body: paragraphs(d.body), date: now(),
       unread: false, starred: false, important: true, labels: [],
       thread: original ? threadOf(original) : undefined, draft: linesOf(d), attachments: d.attachments?.length ? d.attachments : undefined,
+      ...(messageId ? { messageId } : {}),
     };
     setMessages(d.id === null ? [...messages(), saved] : messages().map((m) => (m.id === id ? saved : m)));
     setDraft({ ...d, id });

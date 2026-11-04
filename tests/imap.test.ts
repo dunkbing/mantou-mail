@@ -284,6 +284,38 @@ test("Undo Send within the window sends nothing, and puts the text back in Draft
   expect(mail.messages().find((m) => m.subject === "Lisbon")).toMatchObject({ folder: "drafts", body: ["Booked!"] });
 });
 
+test("a draft is kept in the server's Drafts, replaced when it's edited, and removed when it's sent", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  await addAccount(env);
+  // Waits for the server's Drafts to hold exactly these subjects.
+  const draftsAre = async (...subjects: string[]) => {
+    const end = Date.now() + 5_000;
+    for (;;) {
+      const got = (await server.folder("Drafts")).map((m) => m.subject);
+      if (got.join("|") === subjects.join("|")) return;
+      if (Date.now() > end) throw new Error(`timed out waiting for Drafts to hold [${subjects}]; it has [${got}]`);
+      await Bun.sleep(10);
+    }
+  };
+  mail.compose();
+  mail.editDraft({ to: "alex@example.com", subject: "Lisbon", body: "Booked!" });
+  mail.closeCompose();
+  await draftsAre("Lisbon");
+  expect((await server.folder("Drafts"))[0].flags).toEqual(["\\Draft", "\\Seen"]);
+  await until(() => mail.messages().filter((m) => m.folder === "drafts").length === 1, "one draft shown");
+  mail.compose(mail.messages().find((m) => m.folder === "drafts"));
+  mail.editDraft({ subject: "Lisbon trip" });
+  mail.closeCompose();
+  await draftsAre("Lisbon trip");
+  expect(mail.messages().filter((m) => m.folder === "drafts").length).toBe(1); // the server's copy isn't a second draft
+  mail.compose(mail.messages().find((m) => m.folder === "drafts"));
+  mail.send();
+  await remote.outboxEmpty();
+  await draftsAre();
+  expect(mail.messages().filter((m) => m.folder === "drafts").length).toBe(0);
+});
+
 test("a message that can't be sent goes back to Drafts, with the reason", async () => {
   const env = await setup();
   const { mail, server, remote } = env;

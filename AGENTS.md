@@ -32,7 +32,7 @@ bun run perf         # interaction costs on the real core (not part of bun test)
 
 ## How the app uses Mantou
 
-- `mantou-ui` is an npm package pinned to an exact version (`0.1.5`). Its native core comes prebuilt in a per-platform optional dependency (`mantou-ui-linux-x64` and so on); only on a platform without one would `bunx mantou build-core` (needs Rust) build it from source. Don't edit `node_modules/mantou-ui`; anything that needs changing there is an upstream issue.
+- `mantou-ui` is an npm package pinned to an exact version (`0.1.7`). Its native core comes prebuilt in a per-platform optional dependency (`mantou-ui-linux-x64` and so on); only on a platform without one would `bunx mantou build-core` (needs Rust) build it from source. Don't edit `node_modules/mantou-ui`; anything that needs changing there is an upstream issue.
 - Import everything from `mantou-ui` (components, `createSignal` and the rest of Solid's API, `defineStyle`), `mantou-ui/headless` (tests) and `mantou-ui/mock`. **Never import `solid-js` directly**: Bun resolves it to Solid's server build, which has no reactivity.
 - JSX is compiled by Mantou's plugin: `tsconfig.json` has `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; `bunfig.toml` preloads `mantou-ui/preload` for tests; `mantou run` registers it for the app.
 - Read Mantou's docs before building something: https://mantou.dunkbing.dev (LLM-friendly: `/llms.txt`, `/llms-full.txt`, any page as `.md`). Its `AGENTS.md` has the framework's rules.

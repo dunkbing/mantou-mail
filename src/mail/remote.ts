@@ -167,6 +167,27 @@ export class Remote {
     await this.syncs.get(cfg.id)?.fileSent(sentCopy, !savesSent(smtp.host)).catch(() => {});
   }
 
+  /** Per draft (by Message-ID): its server copy's latest change, so that they happen in the order they were made. */
+  private mirrors = new Map<string, Promise<void>>();
+
+  /** Puts a draft's current text in the server's Drafts in place of its earlier copy, or (no `draft`) removes the copy. Best effort: a later save tries again. */
+  private mirrorDraft(account: string, messageId: string, draft?: Message) {
+    const run = async () => {
+      try {
+        let raw: Buffer | undefined;
+        if (draft) {
+          const original = draft.draft?.replyTo === undefined ? undefined : this.mail?.messages().find((x) => x.id === draft.draft!.replyTo);
+          const files = await Promise.all((draft.attachments ?? []).map(async (a) => ({ name: a.name, type: a.type, content: await this.bytesOf(a) })));
+          raw = await compose(draft, original, files, { keepBcc: true });
+        }
+        await this.syncs.get(account)?.mirrorDraft(messageId, raw);
+      } catch {}
+    };
+    const next = (this.mirrors.get(messageId) ?? Promise.resolve()).then(run);
+    this.mirrors.set(messageId, next);
+    void next.then(() => this.mirrors.get(messageId) === next && this.mirrors.delete(messageId));
+  }
+
   // ------------------------------------------------------------ attachments
 
   /**
@@ -339,6 +360,7 @@ export class Remote {
         this.mail?.receive(account, list);
       },
       onStatus: (account, s) => this.setStatus(account, s),
+      localDrafts: (account) => new Set((this.mail?.messages() ?? this.store.messages()).filter((m) => m.account === account && !m.remote && m.folder === "drafts" && m.messageId).map((m) => m.messageId!)),
       expungeDelay: this.options.expungeDelay,
       window: this.options.window,
       retry: this.options.retry,
@@ -366,6 +388,8 @@ export class Remote {
         else sync?.changed(b, a);
       } else if (this.isReal(a.account)) {
         local.push(a);
+        if (a.folder === "drafts" && a.messageId) this.mirrorDraft(a.account, a.messageId, a);
+        else if (b?.folder === "drafts" && b.messageId) this.mirrorDraft(a.account, b.messageId); // sent, trashed
         // Sent: into the outbox. Rescheduled or sent now: again. Unscheduled or deleted: out of it.
         if (a.outbox && (a.folder === "sent" || a.folder === "scheduled")) {
           if (!b?.outbox || b.outbox.at !== a.outbox.at) {
@@ -382,6 +406,7 @@ export class Remote {
       else {
         gone.push(id);
         this.cancelSend(id); // Undo Send
+        if (b.folder === "drafts" && b.messageId) this.mirrorDraft(b.account, b.messageId); // discarded
       }
     }
     // Real accounts' local messages (drafts) are kept in the store too.
