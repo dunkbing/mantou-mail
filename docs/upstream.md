@@ -2,18 +2,18 @@
 
 Problems and gaps found while building the app, with the issue for each in [dunkbing/mantou](https://github.com/dunkbing/mantou/issues) and the workaround in use. Code comments next to each workaround name the issue, so it's easy to find and remove once Mantou ships a fix. A need that can't be filed yet gets drafted here, ready to paste into Mantou's issue template, until someone files it.
 
-The app uses `mantou-ui` 0.1.7 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
+The app uses `mantou-ui` 0.2.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
 
 ## Open
 
 | Need | Kind | Issue | Workaround in the app |
 |---|---|---|---|
 | Telling a cancelled dialog from one that couldn't be shown (and Linux's zenity cancel answers `[]`) | bug | [dunkbing/mantou#28](https://github.com/dunkbing/mantou/issues/28) | a guess at whether the system has dialogs (zenity, or a portal and D-Bus); without them, a path field to attach, Save as goes to Downloads, removing an account doesn't ask (`hasDialogs` in `src/mail/files.ts`) |
-| Context menus on Linux and Windows (a right click, `onContextMenu`, is in 0.1.7 and `showMenu` works on macOS), opening a file or a URL with the system's app | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | no context menus (a right click on a row isn't used yet); opening attachments, and Google's sign-in page, with `open`/`xdg-open`/`start` (`src/mail/files.ts`, `src/mail/oauth.ts`) |
+| Context menus on Linux and Windows (a right click, `onContextMenu`, is in 0.1.7; `showMenu` works on macOS) | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | none: the row menu only opens on macOS |
 | `setMenu` while the app is being set up answers `false` and installs nothing (macOS) | bug | [dunkbing/mantou#48](https://github.com/dunkbing/mantou/issues/48) | the menu is set at the first layout (`installMenu` in `src/App.tsx`) |
 | The Edit menu's predefined items (undo, cut, copy, paste, select all) take Cmd+Z/X/C/V/A before an `<Input>` sees them (macOS) | bug | [dunkbing/mantou#49](https://github.com/dunkbing/mantou/issues/49) | the Edit menu has only Find; the inputs handle those keys (`src/ui/menu.ts`) |
 | `showMenu` opens the menu at `height - y` (y counted from the bottom of the window) on macOS | bug | [dunkbing/mantou#51](https://github.com/dunkbing/mantou/issues/51) | the row menu passes `windowHeight - y` on macOS (`menu` in `MessageList`) |
-| A custom title bar: content under a transparent title bar (macOS), a drag region, a frameless window with its own buttons | feature | Mantou's [#37](https://github.com/dunkbing/mantou/issues/37) ([the app's needs](https://github.com/dunkbing/mantou/issues/37#issuecomment-6635199132)) | the native title bar |
+| A custom title bar that keeps macOS's traffic lights (content under a transparent bar, an inset the app can read). `frameless` and `<View dragRegion>` are in 0.2.0, but a frameless window has no buttons | feature | Mantou's [#37](https://github.com/dunkbing/mantou/issues/37) ([the app's needs](https://github.com/dunkbing/mantou/issues/37#issuecomment-6635199132)) | the native title bar |
 | Rich text (to show HTML mail, and a formatting composer) | feature | Mantou's [#15](https://github.com/dunkbing/mantou/issues/15) | mail shown as text; the composer takes Markdown and sends it as HTML too (`src/mail/format.ts`) |
 | `<List>` with rows of different heights (in 0.1.7, [#31](https://github.com/dunkbing/mantou/issues/31)) throws when its items get fewer | bug | [dunkbing/mantou#50](https://github.com/dunkbing/mantou/issues/50) | rows rendered a page at a time, more as the scroll nears the end (`MessageList`) |
 
@@ -21,6 +21,7 @@ The app uses `mantou-ui` 0.1.7 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 
 | Need | Issue | In | What the app uses now |
 |---|---|---|---|
+| Opening a file or a URL with the system's app | [#21](https://github.com/dunkbing/mantou/issues/21) (in part), [#38](https://github.com/dunkbing/mantou/issues/38) | 0.2.0 | `openExternal` (`openWithSystem` in `src/mail/files.ts`) |
 | Setting an `<Input>`'s value left the caret where it was | [#30](https://github.com/dunkbing/mantou/issues/30) | 0.1.7 | `setSelection` after a suggestion is taken (`AddressField` in `src/ui/Compose.tsx`) |
 | `right`/`bottom` on absolute views resolve against the window | [#1](https://github.com/dunkbing/mantou/issues/1) | 0.1.2 | plain `position: "absolute"` |
 | Errors in `.tsx` files report the wrong line | [#2](https://github.com/dunkbing/mantou/issues/2) | 0.1.2 | — |

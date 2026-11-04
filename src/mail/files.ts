@@ -2,7 +2,7 @@
 // file with its app, and the system's dialogs for choosing files to attach and
 // where to save one (Mantou's).
 import { existsSync } from "node:fs";
-import { message, openFile, saveFile, type MessageOptions } from "mantou-ui";
+import { message, openExternal, openFile, saveFile, type MessageOptions } from "mantou-ui";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
 
@@ -22,11 +22,8 @@ export function freeName(dir: string, name: string): string {
   }
 }
 
-/** Opens a file with the app the system uses for it. Mantou has no call for this yet (dunkbing/mantou#21). */
-export function openWithSystem(path: string) {
-  const cmd = process.platform === "darwin" ? ["open", path] : process.platform === "win32" ? ["cmd", "/c", "start", "", path] : ["xdg-open", path];
-  Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore" }).unref();
-}
+/** Opens a file (or a URL) with the app the system uses for it. */
+export const openWithSystem = (target: string) => void openExternal(target);
 
 const has = (tool: string) => Bun.which(tool) !== null;
 

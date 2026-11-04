@@ -231,7 +231,6 @@ export async function signIn(
   const abort = () => settle.fail(new OAuthError("Sign-in cancelled"));
   opts.signal?.addEventListener("abort", abort);
   try {
-    // Workaround for dunkbing/mantou#21 (opening a URL): the system's opener, run from Bun.
     await (opts.open ?? openWithSystem)(url.toString());
     const got = await code;
     const json = await tokenRequest(p, { grant_type: "authorization_code", code: got, redirect_uri: redirectUri, code_verifier: verifier });
