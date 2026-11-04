@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- The message list no longer redraws every row when the server's mail refreshes and nothing changed.
 - macOS: no title bar; the window's traffic-light buttons float over the sidebar, and the window can be moved by the strip under them or by the toolbar.
 - The selected conversation stays selected when the server's mail refreshes (it used to jump back to the first one when its copy came back as another message).
 - Updated Mantou to 0.2.1: a window can hide its title bar and keep the traffic lights (for a custom title row later).

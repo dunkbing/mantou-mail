@@ -14,6 +14,13 @@ export type Mailbox =
   | { kind: "label"; id: string }
   | { kind: "search"; query: string };
 
+/** Whether two copies of a message say the same (so the old one can stay). */
+const sameMessage = (a: Message, b: Message) => {
+  const ka = Object.keys(a) as (keyof Message)[];
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => a[k] === b[k] || JSON.stringify(a[k]) === JSON.stringify(b[k]));
+};
+
 export type Tab = "important" | "other";
 
 export function sameMailbox(a: Mailbox, b: Mailbox): boolean {
@@ -422,6 +429,12 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       // A message sent from here is replaced by the server's copy once it's in Sent there.
       const arrived = new Set(list.map((m) => m.messageId).filter(Boolean));
       const before = messages(), sel = selected(), was = picked();
+      // A message the server sends unchanged stays the same object, so its row isn't rebuilt (the list doesn't flicker on every refresh).
+      const known = new Map(before.map((m) => [m.id, m]));
+      list = list.map((m) => {
+        const o = known.get(m.id);
+        return o && o.account === m.account && sameMessage(o, m) ? o : m;
+      });
       batch(() => {
         setMessagesRaw([...before.filter((m) => (m.account !== account || !m.remote) && !(m.messageId && !m.outbox && !m.remote && arrived.has(m.messageId))), ...list]);
         // A message can come back as another row (the server's copy in another folder, or after a move): the selection follows it by its Message-ID, instead of falling back to the first one.

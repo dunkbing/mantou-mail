@@ -444,6 +444,22 @@ test("when the server sends a message back as another row (same Message-ID), the
   expect(mail.selected()!.id).toBe(912);
 });
 
+test("a refresh that changes nothing keeps the very same messages (rows aren't rebuilt); a changed one is replaced", () => {
+  const { mail } = app();
+  const base = sampleMessages().filter((m) => m.folder === "inbox" && m.important);
+  const acct = base[0].account;
+  const mk = (id: number, unread = false) => ({ ...base[0], id, messageId: `m${id}@x`, account: acct, remote: { path: "INBOX", uid: id }, unread, date: new Date(Date.UTC(2026, 10, 3) - id * 3_600_000) });
+  mail.receive(acct, [mk(1), mk(2)]);
+  const first = mail.messages().filter((m) => m.remote);
+  mail.receive(acct, [mk(1), mk(2)]); // fresh objects, same content
+  expect(mail.messages().filter((m) => m.remote).every((m, i) => m === first[i])).toBe(true);
+  mail.receive(acct, [mk(1), mk(2, true)]);
+  const now = mail.messages().filter((m) => m.remote);
+  expect(now[0]).toBe(first[0]);
+  expect(now[1]).not.toBe(first[1]);
+  expect(now[1].unread).toBe(true);
+});
+
 test("Send Later presets: in an hour, tomorrow morning and afternoon, Monday", () => {
   const at = (from: string) => sendLaterOptions(new Date(from)).map((o) => `${o.name} ${o.at.toString().slice(0, 21)}`);
   expect(at("2026-11-03T09:30:00")).toEqual(["In an hour Tue Nov 03 2026 10:30", "Tomorrow morning Wed Nov 04 2026 08:00", "Tomorrow afternoon Wed Nov 04 2026 13:00", "Monday morning Mon Nov 09 2026 08:00"]);
