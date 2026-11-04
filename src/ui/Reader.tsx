@@ -1,11 +1,10 @@
 // The reader: the selected message's conversation, and the panel under it
 // (reply, snooze, labels).
-import { For, Show, Text, View, createEffect, createSignal, on } from "mantou-ui";
+import { For, Show, Text, View, createEffect, createSignal, on, Scroll, type Node } from "mantou-ui";
 import { LABELS, daysSince, longDate, shortDate, type Message } from "../data";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
 import { Avatar, Chip, LabelChips, Kbd } from "./common";
-import { RELATIVE, createScroll, ScrollThumb } from "./scroll";
 import { ReplyComposer } from "./Compose";
 
 export function displayName(mail: Mail, msg: Message) {
@@ -89,7 +88,7 @@ export function Panel(props: { mail: Mail }) {
 
 export function Reader(props: { mail: Mail }) {
   const m = props.mail;
-  const scroll = createScroll();
+  let scroll: Node | undefined;
   /** Messages of the conversation opened by pressing them (the selected one is always open). */
   const [opened, setOpened] = createSignal<ReadonlySet<number>>(new Set());
   const isOpen = (msg: Message) => msg.id === m.selected()?.id || opened().has(msg.id);
@@ -100,14 +99,13 @@ export function Reader(props: { mail: Mail }) {
   };
   createEffect(on(() => m.selected()?.id, () => {
     setOpened(new Set<number>());
-    scroll.to(0);
+    if (scroll && !scroll.released) scroll.scrollTo({ y: 0 }); // the <Show> releases it while nothing is selected
   }));
-  createEffect(on([m.conversation, opened, m.panel], () => scroll.to(scroll.y())));
   return (
     <View style={{ flexGrow: 1, flexShrink: 1, backgroundColor: "#ffffff" }}>
       <Show when={m.selected()} fallback={<Text style={[small, { padding: 48, textAlign: "center" }]}>No message selected</Text>}>
-        <View ref={scroll.viewportRef} style={{ ...RELATIVE, flexGrow: 1, minHeight: 0, overflow: "hidden" }} onWheel={(e) => scroll.by(e.dy)}>
-          <View ref={scroll.contentRef} style={{ marginTop: -scroll.y(), paddingTop: 28, paddingLeft: 36, paddingRight: 36, paddingBottom: 28, gap: 18 }}>
+        <Scroll ref={(n) => (scroll = n)} style={{ flexGrow: 1, minHeight: 0 }}>
+          <View style={{ paddingTop: 28, paddingLeft: 36, paddingRight: 36, paddingBottom: 28, gap: 18 }}>
             <Text style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject || "(no subject)"}</Text>
             <Show when={m.selected()!.folder === "drafts"}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -140,8 +138,7 @@ export function Reader(props: { mail: Mail }) {
               )}
             </For>
           </View>
-          <ScrollThumb scroll={scroll} />
-        </View>
+        </Scroll>
         <Show when={m.panel()}>
           <Panel mail={m} />
         </Show>

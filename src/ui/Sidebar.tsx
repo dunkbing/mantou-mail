@@ -3,7 +3,7 @@ import { For, Input, Show, Text, View, type Node } from "mantou-ui";
 import { LABELS } from "../data";
 import { sameMailbox, type Mail, type Mailbox } from "../state";
 import { C, caption } from "./theme";
-import { Kbd, dialogFocus } from "./common";
+import { Kbd } from "./common";
 import { Icon, type IconName } from "./icons";
 import { STATE_COLOR } from "./Accounts";
 import type { Remote } from "../mail/remote";
@@ -49,12 +49,7 @@ export function SearchField(props: { mail: Mail; ref: (n: Node) => void }) {
         value={m.query()}
         placeholder="Search mail"
         onChange={m.setQuery}
-        onFocus={() => {
-          // Workaround for dunkbing/mantou#6: Tab leaves a dialog for this field, behind it.
-          const back = dialogFocus();
-          if (back) return void (input?.blur(), back());
-          m.startSearch();
-        }}
+        onFocus={m.startSearch}
         onBlur={m.endSearch}
         onSubmit={() => {
           if (!m.query().trim()) m.cancelSearch();

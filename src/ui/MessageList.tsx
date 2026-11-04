@@ -1,10 +1,9 @@
 // The message list: a row per message, scrolled with the wheel.
-import { For, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, type Node } from "mantou-ui";
+import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, type Node } from "mantou-ui";
 import { daysSince, shortDate, type Message } from "../data";
 import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
-import { RELATIVE, createScroll, ScrollThumb } from "./scroll";
 import { Icon, type IconName } from "./icons";
 
 export const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
@@ -98,41 +97,41 @@ export function EmptyList(props: { mail: Mail }) {
 /**
  * Rows are rendered a page at a time, more as the scroll nears the end of
  * what's rendered (and always as far as the selection). Workaround for
- * dunkbing/mantou#5 (a virtualised list): rendering every row of a big
+ * dunkbing/mantou#19 (a virtualized List): rendering every row of a big
  * mailbox costs about 8 nodes and 53 ops a row.
  */
 export const PAGE = 60;
 
 export function MessageList(props: { mail: Mail }) {
   const m = props.mail;
-  const scroll = createScroll();
+  let list: Node | undefined;
   const rows = new Map<number, Node>();
   const [limit, setLimit] = createSignal(PAGE);
+  // The scroll's offset and sizes as the core last reported them.
+  const at = { offset: 0, viewport: 0, content: 0 };
   const shown = createMemo(() => {
-    const list = m.list(), s = m.selected();
-    const at = s ? list.indexOf(s) : -1;
-    return list.slice(0, Math.max(limit(), at + 1 + PAGE / 4));
+    const all = m.list(), s = m.selected();
+    const at = s ? all.indexOf(s) : -1;
+    return all.slice(0, Math.max(limit(), at + 1 + PAGE / 4));
   });
-  createEffect(on([scroll.y, scroll.extent], () => {
-    const e = scroll.extent();
-    if (shown().length < m.list().length && scroll.y() + 2 * e.viewport >= e.content) setLimit(shown().length + PAGE);
+  /** Within two screens of the end of what's rendered: render another page. Checked when the core reports a scroll or a new size, so the sizes are current. */
+  const more = () => {
+    if (at.content > 0 && shown().length < m.list().length && at.offset + 2 * at.viewport >= at.content) setLimit(shown().length + PAGE);
+  };
+  createEffect(on([m.mailbox, m.tab], () => {
+    setLimit(PAGE);
+    at.offset = 0;
+    list?.scrollTo({ y: 0 });
   }));
-  createEffect(on([m.mailbox, m.tab], () => setLimit(PAGE)));
-  // Keep the selected row in view (scrollIntoView, once dunkbing/mantou#5 has it).
+  // Keep the selected row in view.
   createEffect(() => {
     const s = m.selected();
-    const row = s && rows.get(s.id)?.measure();
-    const vp = scroll.viewport()?.measure();
-    if (!row || !vp) return;
-    const top = row.y - vp.y;
-    if (top < 0) scroll.by(top);
-    else if (top + row.height > vp.height) scroll.by(top + row.height - vp.height);
+    const row = s && rows.get(s.id);
+    if (row && !row.released) row.scrollIntoView({ block: "nearest" });
   });
-  createEffect(on([m.mailbox, m.tab], () => scroll.to(0)));
-  createEffect(on(shown, () => scroll.to(scroll.y())));
   return (
-    <View ref={scroll.viewportRef} style={{ ...RELATIVE, width: 400, flexShrink: 0, overflow: "hidden", backgroundColor: "#ffffff" }} onWheel={(e) => scroll.by(e.dy)}>
-      <View ref={scroll.contentRef} style={{ marginTop: -scroll.y() }}>
+    <Scroll ref={(n) => (list = n)} style={{ width: 400, flexShrink: 0, backgroundColor: "#ffffff" }} onScroll={(o) => ((at.offset = o.y), more())} onLayout={(r) => ((at.viewport = r.height), more())}>
+      <View onLayout={(r) => ((at.content = r.height), more())}>
         <For each={shown()} fallback={<EmptyList mail={m} />}>
           {(msg) => {
             let node: Node | undefined;
@@ -146,7 +145,6 @@ export function MessageList(props: { mail: Mail }) {
           }}
         </For>
       </View>
-      <ScrollThumb scroll={scroll} />
-    </View>
+    </Scroll>
   );
 }

@@ -1,18 +1,5 @@
 // Small pieces used all over: avatars, chips, key hints, buttons.
-import { For, Text, View, createSignal, onCleanup } from "mantou-ui";
-
-/**
- * The open dialog's "focus my first field". Workaround for dunkbing/mantou#6
- * (focus scopes): Tab leaves a dialog for the inputs behind it, so an input
- * behind one that gets the focus hands it back with this.
- */
-const [dialogFocus, setDialogFocus] = createSignal<(() => void) | null>(null);
-export { dialogFocus };
-/** Registers the dialog being created (until it's disposed). */
-export function useDialogFocus(focus: () => void) {
-  setDialogFocus(() => focus);
-  onCleanup(() => setDialogFocus(null));
-}
+import { For, Text, View } from "mantou-ui";
 import { LABELS, type Message } from "../data";
 import { SEND_KEYS, C, AVATAR_COLORS } from "./theme";
 

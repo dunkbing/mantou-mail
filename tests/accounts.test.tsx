@@ -64,7 +64,8 @@ test("the Accounts dialog adds an IMAP account; its mail replaces the sample mai
   expect(h.value(user)).toBe("testuser@example.com");
   h.key("Enter"); // on to the password
   h.type("wrong");
-  expect(texts(h)).toContain("•••••"); // the password isn't shown
+  expect(texts(h)).not.toContain("wrong"); // the password isn't shown (a secure input draws bullets)
+  expect(h.value(password)).toBe("wrong");
   retype(h, name, "Test User");
   retype(h, host, "127.0.0.1");
   retype(h, port, String(server.settings.port));

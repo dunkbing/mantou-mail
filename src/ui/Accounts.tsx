@@ -6,7 +6,7 @@ import { guessSettings, providerFor, type ImapSettings } from "../mail/providers
 import type { AccountConfig } from "../mail/store";
 import type { SyncState } from "../mail/imap";
 import { C, caption, field, hline, small } from "./theme";
-import { Avatar, Kbd, SendButton, TextButton, useDialogFocus } from "./common";
+import { Avatar, Kbd, SendButton, TextButton } from "./common";
 
 export const STATE_COLOR: Record<SyncState, string> = {
   connecting: "#f59e0b",
@@ -32,7 +32,7 @@ function Field(props: { label: string; children: JSX.Element; note?: string }) {
 const box = (focused: boolean) => ({ height: 32, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: focused ? C.accent : C.line, backgroundColor: "#ffffff" });
 
 /** A text field with a border that shows the focus. */
-function TextField(props: { value: string; onChange: (v: string) => void; placeholder?: string; width?: number; autoFocus?: boolean; ref?: (n: Node) => void; onSubmit?: () => void; readOnly?: boolean }) {
+function TextField(props: { value: string; onChange: (v: string) => void; placeholder?: string; width?: number; autoFocus?: boolean; ref?: (n: Node) => void; onSubmit?: () => void; readOnly?: boolean; secure?: boolean }) {
   const [focused, setFocused] = createSignal(false);
   return (
     <Input
@@ -41,40 +41,13 @@ function TextField(props: { value: string; onChange: (v: string) => void; placeh
       placeholder={props.placeholder}
       autoFocus={props.autoFocus}
       readOnly={props.readOnly}
+      secure={props.secure}
       onChange={props.onChange}
       onSubmit={props.onSubmit}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       style={[field, box(focused()), props.width ? { width: props.width, flexShrink: 0 } : { flexGrow: 1, flexBasis: 0 }, props.readOnly ? { color: C.secondary } : {}]}
     />
-  );
-}
-
-/**
- * A password field. Workaround for dunkbing/mantou#7 (`secure` inputs): the
- * input's own text, caret and selection are drawn in no colour, and a row of
- * bullets, one per character, sits under it. Paste still works; the bullets
- * don't follow the caret.
- */
-function PasswordField(props: { value: string; onChange: (v: string) => void; onSubmit?: () => void; ref?: (n: Node) => void }) {
-  const [focused, setFocused] = createSignal(false);
-  const clear = "#00000000";
-  return (
-    <View style={{ position: "relative", flexGrow: 1, flexBasis: 0, height: 32 }}>
-      <View style={[box(focused()), { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, justifyContent: "center", overflow: "hidden" }]}>
-        <Text style={{ fontSize: 14, color: C.text, maxLines: 1 }}>{"•".repeat([...props.value].length)}</Text>
-      </View>
-      <Input
-        ref={props.ref}
-        value={props.value}
-        placeholder="Password or app password"
-        onChange={props.onChange}
-        onSubmit={props.onSubmit}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        style={[field, { height: 32, paddingLeft: 11, paddingRight: 11, color: clear, caretColor: clear, selectionColor: clear }]}
-      />
-    </View>
   );
 }
 
@@ -110,9 +83,7 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   const [keychain, setKeychain] = createSignal(true);
-  let first: Node | undefined;
   let passwordInput: Node | undefined;
-  useDialogFocus(() => first?.focus());
   onMount(() => void r.secrets.persistent().then(setKeychain));
 
   const editEmail = (v: string) => {
@@ -160,7 +131,7 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
 
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={props.onClose}>
-      <View style={{ width: 640, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+      <View focusScope style={{ width: 640, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 24, paddingRight: 16, backgroundColor: "#fafafa" }}>
           <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>Accounts</Text>
           <Kbd text="Esc" />
@@ -178,10 +149,10 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
             {providerFor(email())?.passwordHint ?? "Gmail, Outlook, iCloud, Fastmail, Yahoo and most other providers work over IMAP; many need an app password for it."}
           </Text>
           <Field label="Email">
-            <TextField ref={(n) => (first = n)} autoFocus value={email()} onChange={editEmail} placeholder="you@example.com" readOnly={!!reconnecting()} onSubmit={() => passwordInput?.focus()} />
+            <TextField autoFocus value={email()} onChange={editEmail} placeholder="you@example.com" readOnly={!!reconnecting()} onSubmit={() => passwordInput?.focus()} />
           </Field>
           <Field label="Password">
-            <PasswordField ref={(n) => (passwordInput = n)} value={password()} onChange={(v) => (setPassword(v), setError(""))} onSubmit={() => void connect()} />
+            <TextField secure ref={(n) => (passwordInput = n)} value={password()} onChange={(v) => (setPassword(v), setError(""))} placeholder="Password or app password" onSubmit={() => void connect()} />
           </Field>
           <Show when={!reconnecting()}>
             <Field label="Your name">

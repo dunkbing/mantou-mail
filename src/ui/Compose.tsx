@@ -2,7 +2,7 @@
 import { For, Input, Show, Text, View, defineStyle, type Node } from "mantou-ui";
 import { QUICK_REPLIES, type Mail } from "../state";
 import { C, hline, small, field } from "./theme";
-import { Kbd, SendButton, TextButton, useDialogFocus } from "./common";
+import { Kbd, SendButton, TextButton } from "./common";
 
 /** Why the draft can't be sent yet, beside the Send button. */
 export function Problem(props: { mail: Mail }) {
@@ -53,19 +53,14 @@ export function ReplyComposer(props: { mail: Mail }) {
 /** A new message (or a saved draft), over the app: From, To, Subject, the text. */
 export function Composer(props: { mail: Mail }) {
   const m = props.mail;
-  // Decided once, when the composer opens: a draft with recipients starts in
-  // the text. Workaround for dunkbing/mantou#4: an autoFocus that turns true
-  // later focuses the input then, so it mustn't follow the To line.
-  const startInBody = !!m.draft().to;
-  let firstField: Node | undefined;
-  useDialogFocus(() => firstField?.focus());
   let subject: Node | undefined;
   let body: Node | undefined;
   const label = (text: string) => <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{text}</Text>;
   const row = defineStyle({ flexDirection: "row", alignItems: "center", minHeight: 44, paddingLeft: 20, paddingRight: 20 });
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={m.closeCompose}>
-      <View style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+      {/* focusScope: Tab stays among the composer's fields, and the focus goes back where it was when it closes. */}
+      <View focusScope style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 20, paddingRight: 16, backgroundColor: "#fafafa" }}>
           <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>{m.draft().id === null ? "New message" : "Draft"}</Text>
           <Text style={[small, { paddingRight: 8 }]}>Esc keeps it in Drafts</Text>
@@ -89,8 +84,7 @@ export function Composer(props: { mail: Mail }) {
         <View style={row}>
           {label("To")}
           <Input
-            ref={(n) => (firstField = n)}
-            autoFocus={!startInBody}
+            autoFocus={!m.draft().to /* a draft with recipients starts in the text */}
             value={m.draft().to}
             placeholder="Name <email>, separated by commas"
             onChange={(to) => m.editDraft({ to })}
@@ -114,7 +108,7 @@ export function Composer(props: { mail: Mail }) {
         <Input
           ref={(n) => (body = n)}
           multiline
-          autoFocus={startInBody}
+          autoFocus={!!m.draft().to}
           value={m.draft().body}
           placeholder="Write your message"
           onChange={(body) => m.editDraft({ body })}

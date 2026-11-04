@@ -365,10 +365,9 @@ test("scrolling moves only the list: the status bar stays put, and the scrollbar
   const y = h.rect(status)![1];
   h.wheel(400, 400, 300);
   expect(h.rect(status)![1]).toBe(y);
-  const thumb = h.scene().split("\n").find((l) => l.includes(" #0000002a "))!.split(" ").slice(1, 5).map(Number);
-  expect(thumb[2]).toBeLessThanOrEqual(629); // the list's right edge
-  expect(thumb[0]).toBeGreaterThan(600);
-  expect(thumb[1]).toBeGreaterThan(53);
+  // The core's scrollbar thumb, at the list's right edge (x 629 is the rule between list and reader).
+  const thumb = h.scene().split("\n").filter((l) => l.startsWith("quad ")).map((l) => l.split(" ").slice(1, 5).map(Number)).find(([x0, y0, x1]) => x0 > 600 && x1 <= 629 && x1 - x0 <= 8 && y0 > 53);
+  expect(thumb).toBeDefined();
 });
 
 test("a big mailbox renders a page of rows at a time: more as the scroll nears the end, and always the selection", () => {
