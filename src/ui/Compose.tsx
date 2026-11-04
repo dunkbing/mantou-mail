@@ -24,18 +24,17 @@ function AddressField(props: { mail: Mail; line: Line; autoFocus?: boolean; inse
   const value = () => m.draft()[props.line] ?? "";
   const [pick, setPick] = createSignal(0);
   const [moved, setMoved] = createSignal(false);
-  // Workaround for dunkbing/mantou#30: the caret stays where it was when the
-  // app replaces the text, so taking a suggestion makes a new input (whose
-  // caret starts at the end).
-  const [generation, setGeneration] = createSignal(0);
+  let input: Node | undefined;
   const suggestions = createMemo(() => (activeLine() === props.line ? suggestRecipients(value(), m.contacts()) : []));
   const take = (i: number) => {
     const c = suggestions()[i];
     if (!c) return false;
-    m.editDraft({ [props.line]: acceptRecipient(value(), c) });
+    const text = acceptRecipient(value(), c);
+    m.editDraft({ [props.line]: text });
     setPick(0);
     setMoved(false);
-    setGeneration(generation() + 1);
+    // The input has the focus again (a press took it), with the caret after what was taken.
+    if (input && !input.released) input.focus().setSelection(text.length);
     return true;
   };
   const whole = () => parseRecipients(value().slice(value().lastIndexOf(",") + 1)).ok.length > 0;
@@ -48,20 +47,16 @@ function AddressField(props: { mail: Mail; line: Line; autoFocus?: boolean; inse
     <>
       <View style={{ flexDirection: "row", alignItems: "center", minHeight: 44, paddingLeft: props.inset ?? 20, paddingRight: props.inset ?? 20 }}>
         <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{LINE_NAMES[props.line]}</Text>
-        <For each={[generation()]}>
-          {(g) => (
-            <Input
-              ref={(n) => props.ref?.(n)}
-              autoFocus={g > 0 || props.autoFocus}
-              value={value()}
-              placeholder={props.line === "to" ? "Name <email>, separated by commas" : ""}
-              onChange={(v) => (m.editDraft({ [props.line]: v }), setPick(0), setMoved(false))}
-              onFocus={() => setActiveLine(props.line)}
-              onSubmit={() => ((moved() || !whole()) && take(pick())) || props.onNext?.()}
-              style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
-            />
-          )}
-        </For>
+        <Input
+          ref={(n) => ((input = n), props.ref?.(n))}
+          autoFocus={props.autoFocus}
+          value={value()}
+          placeholder={props.line === "to" ? "Name <email>, separated by commas" : ""}
+          onChange={(v) => (m.editDraft({ [props.line]: v }), setPick(0), setMoved(false))}
+          onFocus={() => setActiveLine(props.line)}
+          onSubmit={() => ((moved() || !whole()) && take(pick())) || props.onNext?.()}
+          style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+        />
         {props.trailing?.()}
       </View>
       <Show when={suggestions().length}>
