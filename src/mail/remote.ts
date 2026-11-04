@@ -86,7 +86,10 @@ export class Remote {
   /** Connects the app's state, and starts syncing every account (one without its password or sign-in says so). */
   async attach(mail: Mail) {
     this.mail = mail;
-    for (const a of this.accounts()) this.start(a);
+    for (const a of this.accounts()) {
+      if (await this.secrets.get(a.id)) this.start(a);
+      else this.setStatus(a.id, { state: "needs-password", detail: a.oauth ? `Sign in to ${a.email} again to sync it` : `Enter the password for ${a.email} to sync it` });
+    }
     // What was in the outbox when the app last stopped goes now.
     for (const m of mail.messages()) if (m.outbox && this.isReal(m.account)) this.queueSend(m, 0); // and scheduled ones at their time
   }
