@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { SAMPLE_ACCOUNTS, longDate, now, sampleMessages, type Attachment, type Folder, type Message } from "../data";
 import { Blobs } from "./blobs";
-import { downloadsDir, freeName, openWithSystem, pickFiles, typeOf } from "./files";
+import type { MessageOptions } from "mantou-ui";
+import { confirm, downloadsDir, freeName, hasDialogs, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
 import { AccountSync, checkLogin, type SyncStatus } from "./imap";
 import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
@@ -52,6 +53,8 @@ export class Remote {
       /** Where opened attachments are saved (default: Downloads), and what opens them (default: the system). */
       downloads?: string;
       open?: (path: string) => void;
+      /** Whether the system's dialogs can be shown (default: a guess, see hasDialogs). */
+      dialogs?: boolean;
     } = {},) {
     this.lastId = store.maxId();
     this.blobs = options.blobs ?? new Blobs(join(tmpdir(), "mantou-mail-attachments"));
@@ -177,6 +180,14 @@ export class Remote {
     return path;
   }
 
+  /** Saves an attachment where the person chooses (Downloads when there's no dialog); resolves to the path, or null if they cancelled. */
+  async saveAttachment(message: Message, a: Attachment): Promise<string | null> {
+    const path = await this.pickSavePath(this.options.downloads ?? downloadsDir(), a.name);
+    if (!path) return null;
+    await Bun.write(path, await this.bytesOf(a, message));
+    return path;
+  }
+
   /** Files from this computer as attachments: their bytes go to the blob store, so the draft doesn't depend on them staying put. */
   async attachFiles(paths: string[]): Promise<Attachment[]> {
     return Promise.all(paths.map(async (path) => {
@@ -187,8 +198,15 @@ export class Remote {
     }));
   }
 
-  /** The system's file picker (null where there's none: the composer then asks for a path). */
-  pickFiles = pickFiles;
+  private get dialogs() {
+    return this.options.dialogs ?? hasDialogs();
+  }
+  /** The system's file dialog (null where there's none: the composer then asks for a path). */
+  pickFiles = () => pickFiles(this.dialogs);
+  /** The system's save dialog (a free name in Downloads where there's none). */
+  pickSavePath = (dir: string, name: string) => pickSavePath(dir, name, this.dialogs);
+  /** The system's message box, for a yes or no (yes where there's none). */
+  confirm = (options: MessageOptions) => confirm(options, this.dialogs);
 
   /** Waits for the outbox to empty (tests). */
   async outboxEmpty() {

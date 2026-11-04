@@ -5,7 +5,7 @@ import type { Remote } from "../mail/remote";
 import { guessSettings, guessSmtp, providerFor, type ImapSettings, type SmtpSettings } from "../mail/providers";
 import type { AccountConfig } from "../mail/store";
 import type { SyncState } from "../mail/imap";
-import { C, caption, field, hline, small } from "./theme";
+import { C, caption, field, hline, small, dialogShadow } from "./theme";
 import { Avatar, Kbd, SendButton, TextButton } from "./common";
 
 export const STATE_COLOR: Record<SyncState, string> = {
@@ -53,6 +53,15 @@ function TextField(props: { value: string; onChange: (v: string) => void; placeh
 
 function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect: () => void }) {
   const status = () => props.remote.statuses()[props.account.id];
+  const remove = async () => {
+    const yes = await props.remote.confirm({
+      title: "Remove account",
+      message: `Remove ${props.account.email}? Its mail stays on the server; this computer's copy and the saved password go.`,
+      level: "warning",
+      buttons: ["Remove", "Cancel"],
+    });
+    if (yes) await props.remote.removeAccount(props.account.id);
+  };
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 10, paddingBottom: 10 }}>
       <Avatar name={props.account.sender} size={32} />
@@ -66,7 +75,7 @@ function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect
       <Show when={status()?.state === "needs-password"}>
         <TextButton label="Enter password" onPress={props.onReconnect} />
       </Show>
-      <TextButton label="Remove" onPress={() => void props.remote.removeAccount(props.account.id)} />
+      <TextButton label="Remove" onPress={() => void remove()} />
     </View>
   );
 }
@@ -144,7 +153,7 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
 
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={props.onClose}>
-      <View focusScope style={{ width: 640, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+      <View focusScope style={{ width: 640, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff", boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 24, paddingRight: 16, backgroundColor: "#fafafa" }}>
           <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>Accounts</Text>
           <Kbd text="Esc" />

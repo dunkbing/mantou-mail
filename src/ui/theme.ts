@@ -18,6 +18,11 @@ export const C = {
   star: "#f59e0b",
   backdrop: "#11182759",
 };
+/** Under a dialog, over the backdrop. */
+export const dialogShadow = { x: 0, y: 16, blur: 48, spread: -8, color: "#1118274d" };
+/** Under the Compose button. */
+export const buttonShadow = { x: 0, y: 2, blur: 6, color: "#4f46e540" };
+
 export const AVATAR_COLORS = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
 
 export const hline = defineStyle({ height: 1, flexShrink: 0, backgroundColor: C.line });

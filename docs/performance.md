@@ -27,6 +27,8 @@ Latest run: 4 November 2026, mantou-ui 0.1.3, Linux, with `<Scroll>` (the core s
 | Icons drawn from views ([dunkbing/mantou#8](https://github.com/dunkbing/mantou/issues/8)) | +77 nodes and about +660 ops at mount; interactions unchanged |
 | mantou-ui 0.1.1 → 0.1.3: `<Scroll>` instead of negative margins, and the text-cost fix ([#9](https://github.com/dunkbing/mantou/issues/9)) | a wheel turn: 2 ops and a relayout → no ops and no layout (the core scrolls); `j` 10.4 → 5.6 ms; switch mailbox 31 → 19 ms; mount 58 → 31 ms |
 
+mantou-ui 0.1.4 and the icon font (4 November), measured against 0.1.3 with the views-drawn icons on the same machine, at the same time (this machine was about 40% slower than for the table above, so the times aren't comparable with it): an icon is one text node instead of up to 10 views, so mount is 392 → 325 nodes and 2,924 → 2,388 ops for the sample mail, and 1,103 → 1,024 nodes and 7,762 → 7,130 ops for 2,000 messages; archive + undo with 2,000 is 15.7 → 11.4 ms; the other times are within the noise. The shadows cost nothing measurable.
+
 Attachments and Forward (4 November) added about 8 nodes and 3% more ops at mount (a paperclip check per row, the Forward button); interactions unchanged. Mount times here vary ±10 ms between runs.
 
 ## What's Mantou's

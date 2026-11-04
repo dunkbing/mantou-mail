@@ -73,8 +73,8 @@ export function humanSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-/** An attachment: its name and size; pressing opens it, × (when given) takes it off a draft. */
-export function AttachmentChip(props: { attachment: Attachment; onPress?: () => void; onRemove?: () => void }) {
+/** An attachment: its name and size; pressing opens it, ↓ (when given) saves it, × (when given) takes it off a draft. */
+export function AttachmentChip(props: { attachment: Attachment; onPress?: () => void; onSave?: () => void; onRemove?: () => void }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, flexShrink: 1, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={props.onPress}>
       <Icon name="paperclip" size={14} color={C.secondary} />
@@ -82,6 +82,11 @@ export function AttachmentChip(props: { attachment: Attachment; onPress?: () => 
         <Text style={{ fontSize: 13, fontWeight: 500, color: C.text, maxLines: 1, maxWidth: 240 }}>{props.attachment.name}</Text>
         <Text style={{ fontSize: 11, color: C.muted }}>{humanSize(props.attachment.size)}</Text>
       </View>
+      <Show when={props.onSave}>
+        <View style={{ width: 24, height: 24, borderRadius: 6, justifyContent: "center", alignItems: "center", backgroundColor: C.faint }} onPress={(e) => (e.stopPropagation(), props.onSave!())}>
+          <Icon name="download" size={14} color={C.secondary} />
+        </View>
+      </Show>
       <Show when={props.onRemove}>
         <View style={{ width: 20, height: 20, borderRadius: 10, justifyContent: "center", alignItems: "center" }} onPress={(e) => (e.stopPropagation(), props.onRemove!())}>
           <Icon name="close" size={14} color={C.muted} />

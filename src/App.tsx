@@ -1,6 +1,6 @@
 // Mantou Mail: a sidebar of mailboxes and labels, a message list, a reader
 // that shows the whole conversation, and keyboard triage (? lists the keys).
-import { Show, View, createEffect, createSignal, onCleanup, onKey, useUi, type Node } from "mantou-ui";
+import { Show, View, createEffect, createSignal, onCleanup, onKey, setMenu, useUi, type Node } from "mantou-ui";
 import { LABELS } from "./data";
 import { createMail, usesTabs, type Mail } from "./state";
 import { hline, vline } from "./ui/theme";
@@ -13,6 +13,7 @@ import { Shortcuts } from "./ui/Shortcuts";
 import { StatusBar } from "./ui/StatusBar";
 import { Accounts } from "./ui/Accounts";
 import type { Remote } from "./mail/remote";
+import { APP_MENU, type Command } from "./ui/menu";
 
 export function App(props: { mail?: Mail; remote?: Remote }) {
   const m = props.mail ?? createMail();
@@ -27,6 +28,32 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
     const unread = m.unread({ kind: "all" });
     ui.title(unread ? `Mantou Mail — ${unread} unread` : "Mantou Mail");
   });
+  // The app menu's commands, the same as their keys.
+  const commands: Record<Command, () => unknown> = {
+    compose: () => m.compose(),
+    accounts: () => props.remote && setAccounts(true),
+    reply: m.toggleReply,
+    forward: m.forward,
+    archive: m.archive,
+    inbox: m.moveToInbox,
+    delete: m.remove,
+    snooze: () => m.togglePanel("snooze"),
+    label: () => m.togglePanel("labels"),
+    star: m.star,
+    unread: m.toggleUnread,
+    undo: m.undo,
+    search: () => searchInput?.focus(),
+    important: () => usesTabs(m.mailbox()) && m.setTab("important"),
+    other: () => usesTabs(m.mailbox()) && m.setTab("other"),
+    next: () => m.move(1),
+    previous: () => m.move(-1),
+    shortcuts: () => setHelp(true),
+  };
+  void setMenu(APP_MENU);
+  onCleanup(ui.onMenu((id) => {
+    if (accounts() || help() || m.composing()) return; // a dialog is open: the menu waits, as the keys do
+    commands[id as Command]?.();
+  }));
   onKey((e) => {
     if (e.type !== "keyDown") return;
     if (accounts()) {

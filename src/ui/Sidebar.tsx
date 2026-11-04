@@ -2,7 +2,7 @@
 import { For, Input, Show, Text, View, type Node } from "mantou-ui";
 import { LABELS } from "../data";
 import { sameMailbox, type Mail, type Mailbox } from "../state";
-import { C, caption } from "./theme";
+import { C, caption, buttonShadow } from "./theme";
 import { Kbd } from "./common";
 import { Icon, type IconName } from "./icons";
 import { STATE_COLOR } from "./Accounts";
@@ -73,7 +73,7 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
         <Text style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Mantou Mail</Text>
       </View>
       <View
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 34, flexShrink: 0, marginBottom: 10, borderRadius: 7, backgroundColor: C.accent }}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 34, flexShrink: 0, marginBottom: 10, borderRadius: 7, backgroundColor: C.accent, boxShadow: buttonShadow }}
         onPress={() => m.compose()}
       >
         <Icon name="plus" size={14} color="#ffffff" />

@@ -184,7 +184,7 @@ Some of these needs are already in `docs/upstream.md`. The rest are new feature 
 | Core-driven scrolling and a virtualised list | Scrolling in 0.1.3; the list is dunkbing/mantou#19 | Mailboxes with 50,000 messages, long threads | `<Scroll>`; rows rendered a page at a time |
 | Rich text: spans, links, inline styles | Blocking (phase 1) | Showing HTML mail (converted to a safe subset), clickable links | Plain text paragraphs |
 | Images | High | Inline images, avatars, logos | Initials in coloured circles |
-| Open URL / file, and file dialogs | High | OAuth sign-in in the browser, links, saving attachments | None |
+| Open URL / file, and file dialogs | High | OAuth sign-in in the browser, links, saving attachments | Dialogs in 0.1.4; opening a URL or file is dunkbing/mantou#21 |
 | Focus and keyboard navigation | High | Composer vs shortcuts, accessibility | A `searching` flag decides who gets keys |
 | Resize and layout events | In 0.1.2 (`onLayout`, `useWindowSize`) | Responsive layout | — |
 | Hover and cursor shapes | Medium | Row actions on hover, links that look clickable | None |
@@ -209,7 +209,7 @@ Networking, storage and the keychain are Bun's job, not Mantou's: TLS sockets (`
 
 ## Phases
 
-Status, 4 November 2026: phase 1 is mostly in. IMAP accounts sync their Inbox, Archive, Sent, Drafts and Trash into SQLite (the newest 200 of each, more on request), with new mail over IDLE; the app's changes go back to the server, and changes made offline are kept across a quit. Still to do in phase 1: full-text search in SQLite (search covers the local copy today), HTML mail as rich text (shown as text; waits on Mantou's rich text, dunkbing/mantou#15), Gmail and Microsoft Graph APIs (IMAP only for now), and a sync worker of its own (sync runs in the app's Worker for now). Phase 2 has started too: the composer, drafts, and sending over SMTP with a 10-second Undo Send, replies threaded with In-Reply-To, a copy in Sent, and failures back in Drafts. Attachments (received ones listed from the MIME structure and downloaded when opened; attached ones through the system's file picker until Mantou has dialogs, dunkbing/mantou#21) and forwards (with their attachments) are in. Send Later is in too (presets, a local Scheduled folder, sent by the app at its time). Still to do in phase 2: rich-text compose (dunkbing/mantou#15).
+Status, 4 November 2026: phase 1 is mostly in. IMAP accounts sync their Inbox, Archive, Sent, Drafts and Trash into SQLite (the newest 200 of each, more on request), with new mail over IDLE; the app's changes go back to the server, and changes made offline are kept across a quit. Still to do in phase 1: full-text search in SQLite (search covers the local copy today), HTML mail as rich text (shown as text; waits on Mantou's rich text, dunkbing/mantou#15), Gmail and Microsoft Graph APIs (IMAP only for now), and a sync worker of its own (sync runs in the app's Worker for now). Phase 2 has started too: the composer, drafts, and sending over SMTP with a 10-second Undo Send, replies threaded with In-Reply-To, a copy in Sent, and failures back in Drafts. Attachments (received ones listed from the MIME structure and downloaded when opened; attached and saved ones through Mantou's file dialogs, since 0.1.4) and forwards (with their attachments) are in. Send Later is in too (presets, a local Scheduled folder, sent by the app at its time). Still to do in phase 2: rich-text compose (dunkbing/mantou#15).
 
 ```mermaid
 flowchart LR
@@ -228,7 +228,7 @@ flowchart LR
 | Phase | Ships | Mantou work it waits on |
 | --- | --- | --- |
 | 1 Real mail, read-only | One IMAP or Gmail account, read, archive, label, search, offline | Virtualised list, rich text, open URL (for OAuth) |
-| 2 Compose and send | Composer, replies, forwards, attachments, Undo Send, Send Later | File dialogs (text input, focus scopes and scroll views are in 0.1.3) |
+| 2 Compose and send | Composer, replies, forwards, attachments, Undo Send, Send Later | Rich text (dialogs are in 0.1.4) |
 | 3 Agent v1 | Summaries, Write with AI, Sound Like Me, Ask, triage proposals, Queue, activity log, MCP server | Nothing new |
 | 4 Autonomy | Standing rules, follow-ups, scheduling, subscription cleanup, memory page | Menus, notifications |
 | 5 1.0 | Several accounts per provider type, local models, accessibility, signed packages for three OSes | Accessibility, multiple windows |

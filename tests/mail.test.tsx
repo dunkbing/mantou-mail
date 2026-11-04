@@ -448,3 +448,23 @@ test("it draws: sidebar, accent, text", () => {
   for (let x = 660; x < 1100; x++) if (shot.at(x, 95)[0] < 80) ink++; // the reader's subject line
   expect(ink).toBeGreaterThan(100);
 }, 30_000);
+
+test("the app menu: its items run the same commands as the keys", () => {
+  const { h, mail } = app();
+  const menu = h.lastService() as unknown as { kind: string; menu: { label: string; items: { id?: string; accelerator?: string }[] }[] };
+  expect(menu.kind).toBe("setMenu");
+  expect(menu.menu.map((x) => x.label)).toEqual(["Mantou Mail", "File", "Edit", "Message", "View", "Window", "Help"]);
+  expect(menu.menu.flatMap((x) => x.items).filter((i) => i.accelerator && !i.accelerator.startsWith("cmd+"))).toEqual([]);
+  const first = mail.selected()!.id;
+  h.chooseMenu("archive");
+  expect(mail.messages().find((x) => x.id === first)!.folder).toBe("archive");
+  h.chooseMenu("undo");
+  expect(mail.messages().find((x) => x.id === first)!.folder).toBe("inbox");
+  h.chooseMenu("compose");
+  expect(mail.composing()).toBe(true);
+  h.chooseMenu("archive"); // the composer is open: triage waits
+  expect(mail.messages().find((x) => x.id === first)!.folder).toBe("inbox");
+  h.key("Escape");
+  h.chooseMenu("shortcuts");
+  expect(texts(h).filter((t) => t === "Keyboard shortcuts").length).toBe(2); // the status bar's, and the dialog's
+});

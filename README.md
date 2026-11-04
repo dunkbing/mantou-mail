@@ -6,7 +6,7 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 IMAP accounts (Gmail, Outlook, iCloud, Fastmail, Yahoo, any IMAP server) synced to a local copy, conversations, Important/Other tabs, labels, snooze, search, replies, forwards and new messages with attachments and drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
 
-> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each, and older ones on request: "Load older messages" at the end of the list), and reading, starring, archiving, deleting and moving go back to the server, also after working offline and quitting. Mail is sent over SMTP after a 10-second Undo Send, or later (Send later: in an hour, tomorrow morning or afternoon, Monday morning; it waits in Scheduled, and needs the app running at that time, or it goes when the app next starts), threaded as a reply where it is one, and filed in Sent. Attachments open with the system's app (saved to Downloads first); attaching uses the system's file picker (on Linux, zenity or kdialog; without either, the composer asks for a path). Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
+> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each, and older ones on request: "Load older messages" at the end of the list), and reading, starring, archiving, deleting and moving go back to the server, also after working offline and quitting. Mail is sent over SMTP after a 10-second Undo Send, or later (Send later: in an hour, tomorrow morning or afternoon, Monday morning; it waits in Scheduled, and needs the app running at that time, or it goes when the app next starts), threaded as a reply where it is one, and filed in Sent. Attachments open with the system's app (saved to Downloads first) or save where you choose; attaching and saving use the system's file dialogs (on Linux, the desktop portal or zenity; without either, the composer asks for a path and saving goes to Downloads). On macOS the menu bar has the app's commands. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
 
 ## Run it
 
@@ -27,6 +27,14 @@ bun run dev
 ```bash
 bun run demo-server
 ```
+
+**To build one executable** (Bun, the app and its icon font in one file, with Mantou's core beside it, in `dist/`):
+
+```bash
+bun run build
+```
+
+It opens at Mantou's default window size, 640 × 400, until the app can choose its own ([dunkbing/mantou#29](https://github.com/dunkbing/mantou/issues/29)); start it with `--width 1200 --height 760` meanwhile.
 
 ## Keys
 
@@ -50,5 +58,7 @@ bun test
 ```
 
 `bun run perf` measures what the common interactions cost on the real core; the numbers are in [docs/performance.md](docs/performance.md).
+
+Icons are [Lucide](https://lucide.dev)'s (ISC licence, `assets/fonts/`).
 
 The tests run the app on a headless instance of Mantou's real core: layout, presses, keys, the wheel and captured pixels, with no window. Real accounts are tested against an IMAP server in the test process ([hoodiecrow](https://github.com/postalsys/hoodiecrow-imap)): the first sync, changes reaching the server, new mail over IDLE, and the saved copy.

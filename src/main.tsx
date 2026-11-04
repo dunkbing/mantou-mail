@@ -1,4 +1,4 @@
-// bun run dev  (mantou run src/main.tsx --width 1200 --height 760)
+// bun run dev  (mantou run src/main.tsx --width 1200 --height 760; the app can't set its window size itself yet, dunkbing/mantou#29)
 // Real accounts are kept in the app's data folder (MANTOU_MAIL_HOME to use another).
 import { run } from "mantou-ui";
 import { App } from "./App";

@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createMail, type Mail } from "../src/state";
 import { imapServer, until } from "./server";
+import { glyph } from "../src/ui/icons";
 
 const cleanup: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -37,7 +38,7 @@ async function app() {
   cleanup.push(() => server.close());
   const store = new Store(":memory:");
   cleanup.push(() => store.close());
-  const remote = new Remote(store, memorySecrets());
+  const remote = new Remote(store, memorySecrets(), { dialogs: true }); // Mantou's dialogs, answered by the tests
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail: Mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -111,12 +112,17 @@ test("Tab stays in a dialog: it doesn't reach the search field behind it", async
   expect(mail.searching()).toBe(false);
 });
 
-test("removing the last account brings the sample mail back", async () => {
+test("removing the last account asks first, then brings the sample mail back", async () => {
   const { h, mail, remote, server } = await app();
   const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });
   await remote.syncOf(a.id)!.firstSync;
   h.step();
   h.press(text(h, "Manage accounts"));
+  h.press(text(h, "Remove")); // no answer: the message box was dismissed
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
+  expect(h.lastService()).toMatchObject({ kind: "message", level: "warning", buttons: ["Remove", "Cancel"] });
+  expect(mail.accounts().map((x) => x.email)).toEqual(["testuser@example.com"]);
+  h.answer(0); // Remove
   h.press(text(h, "Remove"));
   await until(() => mail.accounts()[0]?.sample === true, "the sample accounts", () => h.step());
   expect(texts(h)).toContain("Sunday lunch?");
@@ -180,7 +186,7 @@ test("attachments in the app: open one, forward it with f, attach a file by its 
   h.key("Enter");
   await until(() => texts(h).includes("agenda.txt"), "the new attachment", () => h.step());
   expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md", "agenda.txt"]);
-  const removes = [...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === "×");
+  const removes = [...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === glyph("close"));
   h.press(removes.at(-1)!); // agenda.txt's
   expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md"]);
   h.press(inputs(h)[1]); // To
@@ -189,4 +195,48 @@ test("attachments in the app: open one, forward it with f, attach a file by its 
   expect(mail.composing()).toBe(false);
   h.press(text(h, "Sent"));
   expect(mail.list()[0]).toMatchObject({ subject: "Fwd: Q4 planning — draft OKRs attached", attachments: [{ name: "Q4 OKRs (draft).md" }] });
+});
+
+test("the system's dialogs: attach with the file dialog, save an attachment where the person chooses", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { blobs: new Blobs(join(dir, "blobs")), downloads: dir, open: () => {}, dialogs: true }); // Mantou's dialogs, answered by the test
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  await remote.attach(mail);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  mount(h.ui, () => <App mail={mail} remote={remote} />);
+  h.step();
+
+  // Save as: the dialog suggests the name in Downloads; the file goes where it says.
+  h.press(text(h, "Q4 planning — draft OKRs attached"));
+  const saveButton = () => [...h.ui.nodes.values()].find((n) => n.isText && n.textContent === glyph("download"))!;
+  h.answer(join(dir, "okrs.md"));
+  h.press(saveButton());
+  await until(() => texts(h).some((t) => t.startsWith("Saved “Q4 OKRs (draft).md” to ")), "the save", () => h.step());
+  expect(h.lastService()).toMatchObject({ kind: "saveFile", directory: dir, name: "Q4 OKRs (draft).md" });
+  expect(await Bun.file(join(dir, "okrs.md")).text()).toStartWith("# Q4 OKRs (draft)");
+  h.press(saveButton()); // no answer: cancelled, nothing saved
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
+  expect(h.lastService()).toMatchObject({ kind: "saveFile" });
+
+  // Attach: the file dialog, several files at once.
+  const a = join(dir, "a.txt"), b = join(dir, "b.txt");
+  await Bun.write(a, "A");
+  await Bun.write(b, "BB");
+  h.key("c");
+  h.answer([a, b]);
+  h.press(text(h, "Attach"));
+  await until(() => mail.draft().attachments?.length === 2, "the attachments", () => h.step());
+  expect(h.lastService()).toMatchObject({ kind: "openFile", multiple: true });
+  expect(mail.draft().attachments!.map((x) => [x.name, x.size])).toEqual([["a.txt", 1], ["b.txt", 2]]);
+  const fields = inputs(h).length;
+  h.press(text(h, "Attach")); // cancelled: nothing more, and no path field
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
+  expect(mail.draft().attachments!.length).toBe(2);
+  expect(inputs(h).length).toBe(fields);
 });

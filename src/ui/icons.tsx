@@ -1,68 +1,58 @@
-// Icons. Workaround for dunkbing/mantou#8 (vector images or app fonts):
-// Mantou can't draw SVG or use an icon font yet, so each icon is drawn from
-// what it can draw, on a 16-unit grid: rounded rects and circles (outlined with
-// a border, or filled) and short straight strokes, plus Inter's own glyphs
-// where it has the symbol (★, ↩). Diagonals are steps of small squares. Every
-// icon in the app goes through <Icon>, so moving to real icons is this file.
-import { For, Text, View } from "mantou-ui";
+// Icons: Lucide's icon font (ISC, assets/fonts/LICENSE-lucide.txt), drawn as
+// text with `fontFamily`. assets/fonts/lucide.ttf is a subset with the glyphs
+// below and a few more; scripts/subset-icons.py remakes it. Every icon in the
+// app goes through <Icon>.
+import { readFileSync } from "node:fs";
+import { Text, useUi, type Ui } from "mantou-ui";
+import fontPath from "../../assets/fonts/lucide.ttf" with { type: "file" };
 
-/** A shape on the 16-unit grid: x, y, width, height; `o` outlines it, `r` rounds it. */
-type Part = { x: number; y: number; w: number; h: number; r?: number; o?: boolean };
-const S = 1.5; // stroke width
+/** Lucide's code points, by the app's name for each icon (Lucide's name in the comment). */
+const GLYPHS = {
+  inbox: 0xe0f7,
+  inboxes: 0xe369, // mails
+  archive: 0xe041,
+  trash: 0xe18e, // trash-2
+  clock: 0xe087,
+  doc: 0xe320, // file-pen-line
+  sent: 0xe152, // send
+  tag: 0xe17f,
+  search: 0xe151,
+  plus: 0xe13d,
+  person: 0xe468, // user-round
+  calendar: 0xe304, // calendar-clock
+  paperclip: 0xe12d,
+  keyboard: 0xe284,
+  starOutline: 0xe176, // star
+  reply: 0xe22a,
+  forward: 0xe229,
+  close: 0xe1b2, // x
+  check: 0xe06c,
+  download: 0xe0b2,
+  open: 0xe0b9, // external-link
+  warning: 0xe193, // triangle-alert
+} as const;
 
-const line = (x: number, y: number, w: number, h: number): Part => ({ x, y, w, h, r: S / 2 });
-const box = (x: number, y: number, w: number, h: number, r = 2): Part => ({ x, y, w, h, r, o: true });
-const dot = (x: number, y: number, d = S): Part => ({ x, y, w: d, h: d, r: d / 2 });
-const ring = (x: number, y: number, d: number): Part => ({ x, y, w: d, h: d, r: d / 2, o: true });
-/** A diagonal from (x, y), `n` steps of a small square, each `dx`, `dy` on. */
-const steps = (x: number, y: number, n: number, dx: number, dy: number, d = 1.75): Part[] => Array.from({ length: n }, (_, i) => ({ x: x + i * dx, y: y + i * dy, w: d, h: d, r: d / 3 }));
+export type IconName = keyof typeof GLYPHS;
 
-const SHAPES = {
-  inbox: [box(1, 2.5, 14, 11), line(1, 8.5, 4.5, S), line(10.5, 8.5, 4.5, S), line(5.25, 8.5, S, 2.5), line(9.25, 8.5, S, 2.5), line(5.25, 10.25, 5.5, S)],
-  inboxes: [box(1, 4.5, 14, 10), line(3, 1.75, 10, S), line(1, 10, 4.5, S), line(10.5, 10, 4.5, S), line(5.25, 10, 5.5, S)],
-  archive: [box(1, 2, 14, 4, 1), box(2, 5.5, 12, 8.5, 1.5), line(6, 8.25, 4, S)],
-  trash: [line(1.5, 3.5, 13, S), box(5.5, 1, 5, 3.5, 1), box(3, 4.25, 10, 10.25, 1.5), line(6, 7, S, 5), line(8.5, 7, S, 5)],
-  clock: [ring(1, 1, 14), line(7.25, 4, S, 4.75), line(7.25, 7.25, 3.75, S)],
-  doc: [box(2.5, 1, 11, 14, 1.5), line(5, 4.5, 6, S), line(5, 7.5, 6, S), line(5, 10.5, 3.5, S)],
-  sent: [line(1, 9, S, 5.5), line(13.5, 9, S, 5.5), line(1, 13, 14, S), line(7.25, 1.5, S, 8.5), ...steps(5.6, 3.1, 2, -1.5, 1.5), ...steps(8.65, 3.1, 2, 1.5, 1.5)],
-  tag: [box(1, 3.5, 13.5, 9, 2.5), dot(3.75, 7.25, 2)],
-  search: [ring(1, 1, 10.5), ...steps(9, 9, 6, 0.95, 0.95, 2.4)],
-  plus: [line(7.25, 2, S, 12), line(2, 7.25, 12, S)],
-  person: [ring(5, 1, 6), box(2, 9, 12, 6.5, 3.25)],
-  calendar: [box(1.5, 2.5, 13, 12, 2), line(1.5, 6, 13, S), line(4.5, 1, S, 3.5), line(10, 1, S, 3.5), dot(4.5, 8.75, 1.75), dot(7.25, 8.75, 1.75)],
-  paperclip: [box(4.5, 1, 7, 14, 3.5), box(6.75, 4, 2.5, 7.5, 1.25)],
-  keyboard: [box(1, 3.5, 14, 9.5, 2), dot(3.5, 6, 1.75), dot(6, 6, 1.75), dot(8.5, 6, 1.75), dot(11, 6, 1.75), line(4.5, 9.25, 7, S)],
-} satisfies Record<string, Part[]>;
+/** The character an icon is drawn with (tests find icons by it). */
+export const glyph = (name: IconName) => String.fromCodePoint(GLYPHS[name]);
 
-/** Symbols the bundled Inter has, drawn as text (they're the same on every platform). */
-const GLYPHS = { star: "★", starOutline: "☆", reply: "↩", forward: "↪", close: "×", check: "✓" } as const;
+let font: Uint8Array | null = null;
+const registered = new WeakSet<Ui>();
 
-export type IconName = keyof typeof SHAPES | keyof typeof GLYPHS;
+/** Registers the icon font with a Ui's core, once. */
+export function registerIconFont(ui: Ui) {
+  if (registered.has(ui)) return;
+  registered.add(ui);
+  ui.registerFont((font ??= new Uint8Array(readFileSync(fontPath))));
+}
 
 export function Icon(props: { name: IconName; size?: number; color: string }) {
+  registerIconFont(useUi());
   const size = () => props.size ?? 16;
-  const k = () => size() / 16;
   return (
-    <View style={{ position: "relative", width: size(), height: size(), flexShrink: 0, justifyContent: "center" }}>
-      {props.name in GLYPHS ? (
-        <Text style={{ fontSize: size() * 1.05, lineHeight: 1, color: props.color, textAlign: "center" }}>{GLYPHS[props.name as keyof typeof GLYPHS]}</Text>
-      ) : (
-        <For each={SHAPES[props.name as keyof typeof SHAPES]}>
-          {(p) => (
-            <View
-              style={{
-                position: "absolute",
-                left: p.x * k(),
-                top: p.y * k(),
-                width: p.w * k(),
-                height: p.h * k(),
-                borderRadius: (p.r ?? 0) * k(),
-                ...(p.o ? { borderWidth: S * k(), borderColor: props.color } : { backgroundColor: props.color }),
-              }}
-            />
-          )}
-        </For>
-      )}
-    </View>
+    <Text style={{ fontFamily: "lucide", fontSize: size(), lineHeight: 1, width: size(), height: size(), flexShrink: 0, color: props.color, textAlign: "center" }}>
+      {glyph(props.name)}
+    </Text>
   );
 }

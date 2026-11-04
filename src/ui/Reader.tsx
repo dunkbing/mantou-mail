@@ -25,6 +25,13 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
       (e: Error) => props.mail.note(`Couldn't open “${a.name}”: ${e.message}`),
     );
   };
+  const save = (a: Attachment) => {
+    if (!props.remote) return props.mail.note("Attachments save in the app, with its data folder");
+    props.remote.saveAttachment(msg(), a).then(
+      (path) => path && props.mail.note(`Saved “${a.name}” to ${path.replace(homedir(), "~")}`),
+      (e: Error) => props.mail.note(`Couldn't save “${a.name}”: ${e.message}`),
+    );
+  };
   const to = () => props.mail.accountOf(msg().account)?.email ?? "";
   return (
     <View style={{ gap: 16 }}>
@@ -41,7 +48,7 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
       </View>
       <Show when={msg().attachments?.length}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <For each={msg().attachments}>{(a) => <AttachmentChip attachment={a} onPress={() => open(a)} />}</For>
+          <For each={msg().attachments}>{(a) => <AttachmentChip attachment={a} onPress={() => open(a)} onSave={() => save(a)} />}</For>
         </View>
       </Show>
     </View>

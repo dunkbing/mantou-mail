@@ -1,7 +1,8 @@
 // The operating system's side of attachments: where downloads go, opening a
-// file with its app, and choosing files to attach. Bun runs the platform's own
-// tools for these; nothing here is drawn by Mantou.
+// file with its app, and the system's dialogs for choosing files to attach and
+// where to save one (Mantou's).
 import { existsSync } from "node:fs";
+import { message, openFile, saveFile, type MessageOptions } from "mantou-ui";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
 
@@ -21,7 +22,7 @@ export function freeName(dir: string, name: string): string {
   }
 }
 
-/** Opens a file with the app the system uses for it. */
+/** Opens a file with the app the system uses for it. Mantou has no call for this yet (dunkbing/mantou#21). */
 export function openWithSystem(path: string) {
   const cmd = process.platform === "darwin" ? ["open", path] : process.platform === "win32" ? ["cmd", "/c", "start", "", path] : ["xdg-open", path];
   Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore" }).unref();
@@ -30,36 +31,40 @@ export function openWithSystem(path: string) {
 const has = (tool: string) => Bun.which(tool) !== null;
 
 /**
- * The system's own file picker, for attaching files: osascript on macOS,
- * zenity or kdialog on Linux, PowerShell on Windows. Workaround for
- * dunkbing/mantou#21 (native dialogs). Resolves to the chosen paths ([] if
- * the person cancelled), or null when there's no picker to run.
+ * Whether the system can show Mantou's dialogs. They answer null both
+ * when the person cancels and when there's no dialog to show (on Linux, no
+ * desktop portal and no zenity), so the app guesses. Workaround for
+ * dunkbing/mantou#28.
  */
-export async function pickFiles(): Promise<string[] | null> {
-  let cmd: string[];
-  let split: (out: string) => string[];
-  if (process.platform === "darwin") {
-    cmd = ["osascript", "-e", 'set fs to choose file with prompt "Attach files" with multiple selections allowed', "-e", 'set out to ""', "-e", "repeat with f in fs", "-e", "set out to out & POSIX path of f & linefeed", "-e", "end repeat", "-e", "out"];
-    split = (o) => o.split("\n");
-  } else if (process.platform === "win32") {
-    const ps = "Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Multiselect = $true; $d.Title = 'Attach files'; if ($d.ShowDialog() -eq 'OK') { $d.FileNames -join \"`n\" }";
-    cmd = ["powershell", "-NoProfile", "-Command", ps];
-    split = (o) => o.split(/\r?\n/);
-  } else if (has("zenity")) {
-    cmd = ["zenity", "--file-selection", "--multiple", "--separator=\n", "--title=Attach files"];
-    split = (o) => o.split("\n");
-  } else if (has("kdialog")) {
-    cmd = ["kdialog", "--getopenfilename", homedir(), "--multiple", "--separate-output", "--title", "Attach files"];
-    split = (o) => o.split("\n");
-  } else return null;
-  try {
-    const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "ignore" });
-    const out = await new Response(p.stdout).text();
-    await p.exited;
-    return split(out).map((s) => s.trim()).filter(Boolean);
-  } catch {
-    return null;
-  }
+export function hasDialogs(): boolean {
+  if (process.platform !== "linux") return true;
+  const portal = ["/usr/libexec/xdg-desktop-portal", "/usr/lib/xdg-desktop-portal"].some(existsSync);
+  return has("zenity") || (portal && !!process.env.DBUS_SESSION_BUS_ADDRESS);
+}
+
+/**
+ * Files to attach, from the system's file dialog: the chosen paths ([] if the
+ * person cancelled), or null when there's no dialog (the composer then asks
+ * for a path).
+ */
+export async function pickFiles(dialogs = hasDialogs()): Promise<string[] | null> {
+  if (!dialogs) return null;
+  return (await openFile({ title: "Attach files", multiple: true })) ?? [];
+}
+
+/**
+ * Where to save a file, from the system's save dialog: a path, null if the
+ * person cancelled, or `dir`'s next free name for it when there's no dialog.
+ */
+export async function pickSavePath(dir: string, name: string, dialogs = hasDialogs()): Promise<string | null> {
+  if (!dialogs) return freeName(dir, name);
+  return saveFile({ title: "Save attachment", directory: dir, name: basename(freeName(dir, name)) });
+}
+
+/** Asks with the system's message box: true for its first button. Where there's no message box, true. */
+export async function confirm(options: MessageOptions, dialogs = hasDialogs()): Promise<boolean> {
+  if (!dialogs) return true;
+  return (await message(options)) === 0;
 }
 
 /** A MIME type from a file name, for attachments added here. */

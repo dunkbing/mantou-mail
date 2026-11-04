@@ -5,7 +5,7 @@ import { Icon } from "./icons";
 import { QUICK_REPLIES, sendLaterOptions, type Mail } from "../state";
 import { now } from "../data";
 import { whenShort } from "./MessageList";
-import { C, hline, small, field } from "./theme";
+import { C, hline, small, field, dialogShadow } from "./theme";
 import { AttachmentChip, Kbd, SendButton, TextButton } from "./common";
 
 /** Why the draft can't be sent yet, beside the Send button. */
@@ -29,8 +29,8 @@ function DraftAttachments(props: { mail: Mail }) {
 }
 
 /**
- * Attach: the system's file picker, or, where there's none, a field for a
- * file's path. Workaround for dunkbing/mantou#21 (native dialogs).
+ * Attach: the system's file dialog, or, where it has none, a field for a
+ * file's path. Workaround for dunkbing/mantou#28 (no way to tell).
  */
 function AttachButton(props: { mail: Mail; remote?: Remote }) {
   const [asking, setAsking] = createSignal(false);
@@ -154,7 +154,7 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={m.closeCompose}>
       {/* focusScope: Tab stays among the composer's fields, and the focus goes back where it was when it closes. */}
-      <View focusScope style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff" }} onPress={(e) => e.stopPropagation()}>
+      <View focusScope style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff", boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 20, paddingRight: 16, backgroundColor: "#fafafa" }}>
           <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>{m.draft().id === null ? "New message" : "Draft"}</Text>
           <Text style={[small, { paddingRight: 8 }]}>Esc keeps it in Drafts</Text>
