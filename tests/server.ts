@@ -2,6 +2,7 @@
 // and a second client to look at what the server has.
 import hoodiecrow from "hoodiecrow-imap";
 import { ImapFlow } from "imapflow";
+import { SMTPServer } from "smtp-server";
 import type { ImapSettings } from "../src/mail/providers";
 
 export interface Mail {
@@ -57,11 +58,14 @@ export async function imapServer(folders: { inbox?: Mail[]; archive?: Mail[]; se
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   const port = (server.address() as { port: number }).port;
   const settings: ImapSettings = { host: "127.0.0.1", port, secure: false, user: "testuser" };
+  const smtp = await smtpServer();
   const inspector = new ImapFlow({ host: "127.0.0.1", port, secure: false, auth: { user: "testuser", pass: "testpass" }, logger: false });
   inspector.on("error", () => {});
   await inspector.connect();
   return {
     settings,
+    /** Mail sent to this server's SMTP side. */
+    smtp,
     password: "testpass",
     /** Subjects and flags of a folder's messages, as the server has them. */
     async folder(path: string) {
@@ -82,12 +86,14 @@ export async function imapServer(folders: { inbox?: Mail[]; archive?: Mail[]; se
       await inspector.append(path, raw(m), m.flags ?? []);
     },
     async close() {
+      await smtp.close();
       await inspector.logout().catch(() => inspector.close());
       for (const s of sockets) s.destroy();
       await new Promise<void>((r) => server.close(() => r()));
     },
     /** The server goes away at once, connections and all (the network went down). */
     async drop() {
+      await smtp.close();
       inspector.close();
       for (const s of sockets) s.destroy();
       await new Promise<void>((r) => server.close(() => r()));
@@ -104,4 +110,31 @@ export async function until(cond: () => boolean, what: string, step?: () => void
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
     await Bun.sleep(5);
   }
+}
+
+/** An SMTP server in the test process: it checks the password and keeps what it receives. */
+export async function smtpServer(password = "testpass") {
+  const received: { from: string; to: string[]; raw: string }[] = [];
+  const server = new SMTPServer({
+    logger: false,
+    disabledCommands: ["STARTTLS"],
+    onAuth(auth, _session, done) {
+      done(auth.password === password ? null : Object.assign(new Error("Invalid credentials"), { responseCode: 535 }), { user: auth.username });
+    },
+    onData(stream, session, done) {
+      const chunks: Buffer[] = [];
+      stream.on("data", (c: Buffer) => chunks.push(c));
+      stream.on("end", () => {
+        received.push({ from: session.envelope.mailFrom ? session.envelope.mailFrom.address : "", to: session.envelope.rcptTo.map((r) => r.address), raw: Buffer.concat(chunks).toString() });
+        done();
+      });
+    },
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  const port = (server.server.address() as { port: number }).port;
+  return {
+    settings: { host: "127.0.0.1", port, secure: false, user: "testuser" },
+    received,
+    close: () => new Promise<void>((r) => server.close(() => r())),
+  };
 }

@@ -6,20 +6,28 @@ import { createSignal } from "mantou-ui";
 import { SAMPLE_ACCOUNTS, sampleMessages, type Folder, type Message } from "../data";
 import type { Mail, Mailbox } from "../state";
 import { AccountSync, checkLogin, type SyncStatus } from "./imap";
-import type { ImapSettings } from "./providers";
+import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
+import { checkSmtp, compose, send as sendSmtp } from "./smtp";
 import type { Secrets } from "./secrets";
 import type { AccountConfig, Store } from "./store";
+
+/** How long a message waits in the outbox before it's sent: Undo Send takes it back meanwhile. */
+export const UNDO_SEND_MS = 10_000;
 
 export interface NewAccount {
   email: string;
   password: string;
   imap: ImapSettings;
+  /** Where mail is sent (default: guessed from the address). */
+  smtp?: SmtpSettings;
   /** The sender name for mail from it (default: the part of the address before the @). */
   sender?: string;
 }
 
 export class Remote {
   private syncs = new Map<string, AccountSync>();
+  /** Messages in the outbox, by id: their send timers. */
+  private outbox = new Map<number, ReturnType<typeof setTimeout>>();
   private mail: Mail | null = null;
   private lastId: number;
   private readonly statusSignal = createSignal<Record<string, SyncStatus>>({});
@@ -30,7 +38,7 @@ export class Remote {
   /** Each account's sync status, by account id. */
   readonly statuses = this.statusSignal[0];
 
-  constructor(readonly store: Store, readonly secrets: Secrets, private options: { expungeDelay?: number; window?: number } = {}) {
+  constructor(readonly store: Store, readonly secrets: Secrets, private options: { expungeDelay?: number; window?: number; undoSend?: number } = {}) {
     this.lastId = store.maxId();
     this.listSignal[1](store.accounts());
   }
@@ -57,6 +65,59 @@ export class Remote {
       if (password) this.start(a, password);
       else this.setStatus(a.id, { state: "needs-password", detail: `Enter the password for ${a.email} to sync it` });
     }
+    // What was in the outbox when the app last stopped goes now.
+    for (const m of mail.messages()) if (m.outbox && this.isReal(m.account)) this.queueSend(m, 0);
+  }
+
+  private isReal(account: string) {
+    return this.store.accounts().some((x) => x.id === account);
+  }
+
+  private queueSend(m: Message, delay = this.options.undoSend ?? UNDO_SEND_MS) {
+    if (this.outbox.has(m.id)) return;
+    this.outbox.set(m.id, setTimeout(() => {
+      this.outbox.delete(m.id);
+      void this.deliver(m.id);
+    }, delay));
+  }
+
+  private cancelSend(id: number) {
+    clearTimeout(this.outbox.get(id));
+    this.outbox.delete(id);
+  }
+
+  /** Sends a message from the outbox over SMTP, then files it in Sent. On failure it goes back to Drafts, with the reason. */
+  private async deliver(id: number) {
+    const mail = this.mail;
+    const m = mail?.messages().find((x) => x.id === id);
+    if (!mail || !m?.outbox) return;
+    const cfg = this.accounts().find((a) => a.id === m.account);
+    const password = cfg && (await this.secrets.get(cfg.id));
+    const names = (m.to ?? []).map((c) => c.name).join(", ");
+    const fail = (why: string) => {
+      mail.backToDrafts(id);
+      this.store.put(mail.messages().filter((x) => x.id === id));
+      mail.note(`Couldn't send “${m.subject}”: ${why}. It's in Drafts.`);
+    };
+    if (!cfg || !password) return fail("the account's password is needed");
+    const smtp = cfg.smtp ?? { ...guessSmtp(cfg.email), user: cfg.imap.user };
+    const original = m.outbox.replyTo === undefined ? undefined : mail.messages().find((x) => x.id === m.outbox!.replyTo);
+    let raw: Buffer;
+    try {
+      raw = await compose(m, original);
+      await sendSmtp(smtp, password, m, raw);
+    } catch (e) {
+      return fail((e as Error).message);
+    }
+    mail.patchQuiet(id, { outbox: undefined });
+    this.store.put(mail.messages().filter((x) => x.id === id));
+    mail.note(`Sent to ${names}`);
+    await this.syncs.get(cfg.id)?.fileSent(raw, !savesSent(smtp.host)).catch(() => {});
+  }
+
+  /** Waits for the outbox to empty (tests). */
+  async outboxEmpty() {
+    while (this.outbox.size || this.mail?.messages().some((m) => m.outbox && this.isReal(m.account))) await Bun.sleep(5);
   }
 
   newId = () => {
@@ -69,7 +130,13 @@ export class Remote {
     const sync = new AccountSync(a, password, {
       store: this.store,
       newId: this.newId,
-      onMessages: (account, list) => this.mail?.receive(account, list),
+      onMessages: (account, list) => {
+        // Local copies of sent mail that the server now has in Sent go from the store too (Mail.receive drops them).
+        const arrived = new Set(list.map((m) => m.messageId).filter(Boolean));
+        const copies = this.mail?.messages().filter((m) => m.account === account && !m.remote && !m.outbox && m.messageId && arrived.has(m.messageId)) ?? [];
+        if (copies.length) this.store.remove(copies.map((m) => m.id));
+        this.mail?.receive(account, list);
+      },
       onStatus: (account, s) => this.setStatus(account, s),
       expungeDelay: this.options.expungeDelay,
       window: this.options.window,
@@ -95,13 +162,19 @@ export class Remote {
       if (a.remote) {
         if (!b) sync?.restored(a);
         else sync?.changed(b, a);
-      } else if (this.store.accounts().some((x) => x.id === a.account)) local.push(a);
+      } else if (this.isReal(a.account)) {
+        local.push(a);
+        if (a.outbox && !b?.outbox) this.queueSend(a); // sent: into the outbox
+      }
     }
     const gone: number[] = [];
     for (const [id, b] of before) {
       if (after.has(id)) continue;
       if (b.remote) this.syncs.get(b.account)?.removed(b);
-      else gone.push(id);
+      else {
+        gone.push(id);
+        this.cancelSend(id); // Undo Send
+      }
     }
     // Real accounts' local messages (drafts) are kept in the store too.
     if (local.length) this.store.put(local);
@@ -110,7 +183,9 @@ export class Remote {
 
   /** Checks the login, saves the account and its password, and starts syncing it. */
   async addAccount(n: NewAccount): Promise<AccountConfig> {
+    const smtp = n.smtp ?? { ...guessSmtp(n.email), user: n.imap.user };
     await checkLogin(n.imap, n.password);
+    await checkSmtp(smtp, n.password);
     const email = n.email.trim();
     const id = email.toLowerCase();
     const existing = this.accounts().find((a) => a.id === id);
@@ -120,6 +195,7 @@ export class Remote {
       name: existing?.name ?? email,
       sender: n.sender?.trim() || existing?.sender || email.split("@")[0],
       imap: n.imap,
+      smtp,
     };
     this.store.saveAccount(cfg);
     this.listSignal[1](this.accounts());
@@ -169,6 +245,8 @@ export class Remote {
   }
 
   async stop() {
+    for (const t of this.outbox.values()) clearTimeout(t); // kept in the store: sent on the next start
+    this.outbox.clear();
     await Promise.all([...this.syncs.values()].map((s) => s.stop()));
     this.syncs.clear();
   }

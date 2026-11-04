@@ -44,10 +44,13 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
         </View>
         <Text style={{ fontSize: 13, fontWeight: msg().unread ? 600 : 400, color: C.text, maxLines: 1 }}>{msg().subject || "(no subject)"}</Text>
         <Text style={{ fontSize: 12, color: C.secondary, maxLines: 1 }}>{msg().body.join(" ").replace(/\s+/g, " ")}</Text>
-        <Show when={msg().labels.length > 0 || msg().waitingSince || msg().snoozedUntil || folder() || msg().folder === "drafts"}>
+        <Show when={msg().labels.length > 0 || msg().waitingSince || msg().snoozedUntil || folder() || msg().folder === "drafts" || msg().outbox}>
           <View style={{ flexDirection: "row", gap: 6, paddingTop: 4, flexWrap: "wrap" }}>
             <Show when={msg().folder === "drafts"}>
               <Chip text="Draft" color="#b91c1c" background="#fef2f2" />
+            </Show>
+            <Show when={msg().outbox}>
+              <Chip text="Sending…" color="#92400e" background="#fef3c7" />
             </Show>
             <Show when={folder()}>
               <Chip text={folder() ?? ""} color={C.secondary} background={C.faint} />

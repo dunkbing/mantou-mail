@@ -78,6 +78,8 @@ export interface Message {
   remote?: { path: string; uid: number };
   /** The Message-ID header, without the angle brackets. */
   messageId?: string;
+  /** Written here and waiting to be sent (Undo Send can still take it back), with the message it answers. */
+  outbox?: { replyTo?: number };
 }
 
 /** The conversation a message belongs to. */

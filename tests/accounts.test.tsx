@@ -58,10 +58,12 @@ test("the Accounts dialog adds an IMAP account; its mail replaces the sample mai
   h.press(text(h, "Add your account"));
   expect(texts(h)).toContain("ADD AN IMAP ACCOUNT");
   h.type("testuser@example.com"); // the email field has the focus
-  const [, email, password, name, host, port, user] = inputs(h); // [0] is search
+  const [, email, password, name, host, port, smtpHost, smtpPort, user] = inputs(h); // [0] is search
   expect(h.value(email)).toBe("testuser@example.com");
   expect(h.value(host)).toBe("imap.example.com"); // guessed from the address
   expect(h.value(user)).toBe("testuser@example.com");
+  expect(h.value(smtpHost)).toBe("smtp.example.com");
+  expect(h.value(smtpPort)).toBe("465");
   h.key("Enter"); // on to the password
   h.type("wrong");
   expect(texts(h)).not.toContain("wrong"); // the password isn't shown (a secure input draws bullets)
@@ -69,6 +71,8 @@ test("the Accounts dialog adds an IMAP account; its mail replaces the sample mai
   retype(h, name, "Test User");
   retype(h, host, "127.0.0.1");
   retype(h, port, String(server.settings.port));
+  retype(h, smtpHost, "127.0.0.1");
+  retype(h, smtpPort, String(server.smtp.settings.port));
   retype(h, user, "testuser");
   expect(texts(h)).toContain("STARTTLS");
   h.press(text(h, "Connect"));
@@ -105,7 +109,7 @@ test("Tab stays in a dialog: it doesn't reach the search field behind it", async
 
 test("removing the last account brings the sample mail back", async () => {
   const { h, mail, remote, server } = await app();
-  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings });
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });
   await remote.syncOf(a.id)!.firstSync;
   h.step();
   h.press(text(h, "Manage accounts"));
@@ -127,7 +131,7 @@ test("the end of a real folder's list offers its older mail, and pressing it get
   const h = new HeadlessCore({ width: 1200, height: 760 });
   cleanup.push(() => h.free());
   mount(h.ui, () => <App mail={mail} remote={remote} />);
-  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings });
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });
   await remote.syncOf(a.id)!.firstSync;
   h.step();
   expect(texts(h)).toContain("3 more on the server");

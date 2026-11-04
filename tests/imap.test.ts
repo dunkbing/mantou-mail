@@ -28,7 +28,7 @@ async function setup(opts: { dir?: string } = {}) {
   if (!opts.dir) cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const store = new Store(dir);
   cleanup.push(() => store.close());
-  const remote = new Remote(store, memorySecrets(), { expungeDelay: 30 });
+  const remote = new Remote(store, memorySecrets(), { expungeDelay: 30, undoSend: 30 });
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail: Mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -37,7 +37,7 @@ async function setup(opts: { dir?: string } = {}) {
 }
 
 async function addAccount(env: Awaited<ReturnType<typeof setup>>) {
-  const a = await env.remote.addAccount({ email: "testuser@example.com", password: env.server.password, imap: env.server.settings, sender: "Test User" });
+  const a = await env.remote.addAccount({ email: "testuser@example.com", password: env.server.password, imap: env.server.settings, smtp: env.server.smtp.settings, sender: "Test User" });
   await env.remote.syncOf(a.id)!.firstSync;
   return a;
 }
@@ -141,7 +141,7 @@ test("the saved copy shows at start, before (or without) a connection", async ()
 
 test("a wrong password is refused with the server's reason, and nothing is saved", async () => {
   const env = await setup();
-  await expect(env.remote.addAccount({ email: "testuser@example.com", password: "nope", imap: env.server.settings })).rejects.toThrow(/didn't accept the password/);
+  await expect(env.remote.addAccount({ email: "testuser@example.com", password: "nope", imap: env.server.settings, smtp: env.server.smtp.settings })).rejects.toThrow(/didn't accept the password/);
   expect(env.remote.accounts()).toEqual([]);
   expect(env.mail.accounts()[0].sample).toBe(true);
 });
@@ -164,7 +164,7 @@ test("changes made offline survive a quit, and reach the server on the next star
   cleanup.push(() => server.close());
   const store = new Store(dir);
   cleanup.push(() => store.close());
-  store.saveAccount({ ...store.accounts()[0], imap: server.settings });
+  store.saveAccount({ ...store.accounts()[0], imap: server.settings, smtp: server.smtp.settings });
   const secrets = memorySecrets();
   await secrets.set(a.id, server.password);
   const remote = new Remote(store, secrets);
@@ -192,7 +192,7 @@ test("older mail beyond the kept window comes on request, and stays kept", async
   cleanup.push(() => remote.stop());
   const mail = createMail([], { accounts: [], onChange: remote.onChange });
   await remote.attach(mail);
-  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings });
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });
   await remote.syncOf(a.id)!.firstSync;
   expect(subjects(mail)).toEqual(["Message 8", "Message 7", "Message 6", "Message 5", "Message 4"]);
   expect(remote.olderCount({ kind: "all" })).toBe(3);
@@ -201,4 +201,67 @@ test("older mail beyond the kept window comes on request, and stays kept", async
   expect(subjects(mail).length).toBe(8);
   expect(remote.olderCount({ kind: "all" })).toBe(0);
   expect(store.window(a.id, "inbox", 5)).toBe(10); // kept from now on, also after a restart
+});
+
+test("sending: the outbox waits for Undo Send, then SMTP; the message is filed in Sent once", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  await addAccount(env);
+  mail.compose();
+  mail.editDraft({ to: "Jonas Weber <jonas@example.com>", subject: "Renewal call", body: "Hi Jonas,\n\nThe 15th works. 10:00?" });
+  expect(mail.send()).toBe(true);
+  expect(mail.status()).toBe("Sending to Jonas Weber");
+  expect(mail.messages().find((m) => m.subject === "Renewal call")).toMatchObject({ folder: "sent", outbox: {} });
+  await until(() => server.smtp.received.length === 1, "the SMTP server to receive it");
+  const got = server.smtp.received[0];
+  expect(got.to).toEqual(["jonas@example.com"]);
+  expect(got.raw).toContain("Subject: Renewal call");
+  expect(got.raw).toMatch(/From: Test User <testuser@example.com>/);
+  expect(got.raw).toContain("The 15th works. 10:00?");
+  await remote.outboxEmpty();
+  await until(() => mail.messages().some((m) => m.subject === "Renewal call" && m.remote?.path === "Sent"), "the server's copy in Sent");
+  expect((await server.folder("Sent")).map((m) => m.subject)).toContain("Renewal call");
+  expect(mail.messages().filter((m) => m.subject === "Renewal call").length).toBe(1); // the local copy gave way
+  expect(mail.status()).toBe("Sent to Jonas Weber");
+});
+
+test("a reply is sent with In-Reply-To and References, so it threads everywhere", async () => {
+  const env = await setup();
+  const { mail, server } = env;
+  await addAccount(env);
+  mail.select(mail.list().find((m) => m.subject === "Onboarding review")!.id);
+  mail.toggleReply();
+  mail.editDraft({ body: "Will look tonight." });
+  mail.send();
+  await until(() => server.smtp.received.length === 1, "the reply");
+  expect(server.smtp.received[0].raw).toContain("In-Reply-To: <onboarding@example.com>");
+  expect(server.smtp.received[0].raw).toContain("Subject: Re: Onboarding review");
+  expect(server.smtp.received[0].to).toEqual(["priya@example.com"]);
+});
+
+test("Undo Send within the window sends nothing, and puts the text back in Drafts", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  await addAccount(env);
+  mail.compose();
+  mail.editDraft({ to: "alex@example.com", subject: "Lisbon", body: "Booked!" });
+  mail.send();
+  mail.undo();
+  await Bun.sleep(80); // past the 30 ms window
+  await remote.outboxEmpty();
+  expect(server.smtp.received).toEqual([]);
+  expect(mail.messages().find((m) => m.subject === "Lisbon")).toMatchObject({ folder: "drafts", body: ["Booked!"] });
+});
+
+test("a message that can't be sent goes back to Drafts, with the reason", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  await addAccount(env);
+  await server.smtp.close(); // the SMTP server is gone
+  mail.compose();
+  mail.editDraft({ to: "alex@example.com", subject: "Lisbon", body: "Booked!" });
+  mail.send();
+  await remote.outboxEmpty();
+  expect(mail.messages().find((m) => m.subject === "Lisbon")).toMatchObject({ folder: "drafts", outbox: undefined, draft: { to: "alex@example.com" } });
+  expect(mail.status()).toMatch(/^Couldn't send “Lisbon”: .*refused the connection.*It's in Drafts\.$/);
 });

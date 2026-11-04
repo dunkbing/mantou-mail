@@ -468,6 +468,23 @@ export class AccountSync {
     }
   }
 
+  /**
+   * Mail just sent over SMTP: filed in Sent here (`append`) where the provider
+   * doesn't do that itself, then Sent is synced, so its copy replaces the
+   * local one. Offline, the local copy stays.
+   */
+  async fileSent(raw: Buffer, append: boolean) {
+    const c = this.client;
+    const path = this.paths.get("sent");
+    if (!c || !path) return;
+    await this.run(async () => {
+      if (append) await c.append(path, raw, ["\\Seen"]);
+      await this.syncFolder(c, "sent");
+      await this.idleOnInbox(c);
+    });
+    this.emit();
+  }
+
   /** Keeps `more` older messages of a folder, and fetches them now. */
   async loadOlder(folder: Folder, more = this.hooks.window ?? WINDOW) {
     const c = this.client;

@@ -2,7 +2,7 @@
 // form that adds one (or asks for a password again).
 import { For, Input, Show, Text, View, createSignal, onMount, type JSX, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
-import { guessSettings, providerFor, type ImapSettings } from "../mail/providers";
+import { guessSettings, guessSmtp, providerFor, type ImapSettings, type SmtpSettings } from "../mail/providers";
 import type { AccountConfig } from "../mail/store";
 import type { SyncState } from "../mail/imap";
 import { C, caption, field, hline, small } from "./theme";
@@ -77,6 +77,7 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
   const [password, setPassword] = createSignal("");
   const [sender, setSender] = createSignal("");
   const [server, setServer] = createSignal<ImapSettings>({ host: "", port: 993, secure: true, user: "" });
+  const [smtp, setSmtp] = createSignal<SmtpSettings>({ host: "", port: 465, secure: true, user: "" });
   /** The server settings were typed, not guessed: the email no longer changes them. */
   const [custom, setCustom] = createSignal(false);
   const [reconnecting, setReconnecting] = createSignal<string | null>(null);
@@ -89,18 +90,28 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
   const editEmail = (v: string) => {
     setEmail(v);
     setError("");
-    if (!custom()) setServer(guessSettings(v));
+    if (!custom()) {
+      setServer(guessSettings(v));
+      setSmtp(guessSmtp(v));
+    }
   };
   const editServer = (p: Partial<ImapSettings>) => {
     setCustom(true);
     setError("");
     setServer({ ...server(), ...p, ...(p.port !== undefined ? { secure: p.port === 993 } : {}) });
+    if (p.user !== undefined) setSmtp({ ...smtp(), user: p.user }); // the same login, as almost everywhere
+  };
+  const editSmtp = (p: Partial<SmtpSettings>) => {
+    setCustom(true);
+    setError("");
+    setSmtp({ ...smtp(), ...p, ...(p.port !== undefined ? { secure: p.port === 465 } : {}) });
   };
   const reconnect = (a: AccountConfig) => {
     setReconnecting(a.id);
     setEmail(a.email);
     setSender(a.sender);
     setServer(a.imap);
+    setSmtp(a.smtp ?? { ...guessSmtp(a.email), user: a.imap.user });
     setCustom(true);
     setPassword("");
     setError("");
@@ -111,14 +122,16 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
     if (!/@/.test(email())) return setError("Enter your email address");
     if (!password()) return setError("Enter the password (or app password)");
     if (!server().host) return setError("Enter the IMAP server");
+    if (!smtp().host) return setError("Enter the SMTP server");
     setBusy(true);
     setError("");
     try {
-      await r.addAccount({ email: email(), password: password(), imap: server(), sender: sender() });
+      await r.addAccount({ email: email(), password: password(), imap: server(), smtp: smtp(), sender: sender() });
       setEmail("");
       setPassword("");
       setSender("");
       setServer({ host: "", port: 993, secure: true, user: "" });
+      setSmtp({ host: "", port: 465, secure: true, user: "" });
       setCustom(false);
       setReconnecting(null);
     } catch (e) {
@@ -162,6 +175,10 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
           <Field label="IMAP server" note={server().secure ? "TLS" : "STARTTLS"}>
             <TextField value={server().host} onChange={(host) => editServer({ host })} placeholder="imap.example.com" />
             <TextField width={72} value={String(server().port)} onChange={(v) => editServer({ port: Number(v.replace(/\D/g, "")) || 0 })} />
+          </Field>
+          <Field label="SMTP server" note={smtp().secure ? "TLS" : "STARTTLS"}>
+            <TextField value={smtp().host} onChange={(host) => editSmtp({ host })} placeholder="smtp.example.com" />
+            <TextField width={72} value={String(smtp().port)} onChange={(v) => editSmtp({ port: Number(v.replace(/\D/g, "")) || 0 })} />
           </Field>
           <Field label="Username">
             <TextField value={server().user} onChange={(user) => editServer({ user })} placeholder="Usually your email address" />

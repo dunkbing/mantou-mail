@@ -5,10 +5,12 @@
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import type { Account, Message } from "../data";
-import type { ImapSettings } from "./providers";
+import type { ImapSettings, SmtpSettings } from "./providers";
 
 export interface AccountConfig extends Account {
   imap: ImapSettings;
+  /** Where mail is sent (accounts added before sending existed guess it). */
+  smtp?: SmtpSettings;
 }
 
 const DATES = new Set(["date", "waitingSince"]);

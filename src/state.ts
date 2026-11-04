@@ -199,6 +199,9 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     return (l[i + 1] ?? l[i - 1])?.id ?? null;
   }
 
+  /** Changes a message without an undo step or an onChange (the outbox after sending). */
+  const patchQuiet = (id: number, p: Partial<Message>) => setMessagesRaw(messages().map((m) => (m.id === id ? { ...m, ...p } : m)));
+
   /** Whether the draft has anything the user typed (a reply's To and Subject come filled in). */
   const typed = (d: Draft) => !!d.body.trim() || (d.kind === "new" && !!(d.to.trim() || d.subject.trim()));
 
@@ -300,7 +303,16 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
      * account's server messages; this isn't an undo step and isn't sent back.
      */
     receive(account: string, list: Message[]) {
-      setMessagesRaw([...messages().filter((m) => m.account !== account || !m.remote), ...list]);
+      // A message sent from here is replaced by the server's copy once it's in Sent there.
+      const arrived = new Set(list.map((m) => m.messageId).filter(Boolean));
+      setMessagesRaw([...messages().filter((m) => (m.account !== account || !m.remote) && !(m.messageId && !m.outbox && !m.remote && arrived.has(m.messageId))), ...list]);
+    },
+    patchQuiet,
+    /** A message that couldn't be sent goes back to Drafts, to fix and send again. */
+    backToDrafts(id: number) {
+      const m = messages().find((x) => x.id === id);
+      if (!m) return;
+      patchQuiet(id, { folder: "drafts", outbox: undefined, draft: { to: formatContacts(m.to ?? []), replyTo: m.outbox?.replyTo } });
     },
     /**
      * Sets the accounts, and the messages to show for them (default: the ones
@@ -425,19 +437,26 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       if (bad.length) return setProblem(`“${bad[0]}” isn't an email address`), false;
       if (!ok.length) return setProblem("Add a recipient first"), false;
       if (!d.body.trim() && !d.subject.trim()) return setProblem("Write something first"), false;
-      if (!accountOf(d.account)?.sample) return setProblem("Sending from real accounts comes with SMTP, in phase 2; Esc keeps this in Drafts"), false;
       const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
+      const from = fromAccount(d.account);
+      // A real account's message waits in the outbox (Undo Send), then goes over SMTP (src/mail/remote.ts).
+      const real = !accountOf(d.account)?.sample;
+      // Saved first, so that undoing the send puts the text back in Drafts (and before the sent
+      // message takes the next id, so the two don't share one).
+      saveDraft();
+      const saved = draft().id;
       const sent: Message = {
-        id: nextId(), account: d.account, folder: "sent", from: fromAccount(d.account), to: ok,
+        id: nextId(), account: d.account, folder: "sent", from, to: ok,
         subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: now(),
         unread: false, starred: false, important: true, labels: [], thread: original ? threadOf(original) : undefined,
+        ...(real ? { messageId: `${crypto.randomUUID()}@${from.email.split("@")[1] ?? "mantou.mail"}`, outbox: { replyTo: original?.id } } : {}),
       };
       batch(() => {
         change((ms) => {
-          let out = ms.filter((m) => m.id !== d.id);
+          let out = ms.filter((m) => m.id !== saved);
           if (original) out = patch(original.id, { waitingSince: now() })(out);
           return [...out, sent];
-        }, `Sent to ${ok.map((c) => c.name).join(", ")}`);
+        }, `${real ? "Sending" : "Sent"} to ${ok.map((c) => c.name).join(", ")}`);
         setDraft({ ...d, id: null, to: "", subject: "", body: "" });
         setComposing(false);
         setPanel(null);

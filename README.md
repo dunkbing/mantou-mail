@@ -6,7 +6,7 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 IMAP accounts (Gmail, Outlook, iCloud, Fastmail, Yahoo, any IMAP server) synced to a local copy, conversations, Important/Other tabs, labels, snooze, search, replies and new messages with drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
 
-> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each, and older ones on request: "Load older messages" at the end of the list), and reading, starring, archiving, deleting and moving go back to the server, also after working offline and quitting; sending (SMTP) comes next, so mail written from a real account stays in Drafts for now. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
+> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each, and older ones on request: "Load older messages" at the end of the list), and reading, starring, archiving, deleting and moving go back to the server, also after working offline and quitting. Mail is sent over SMTP after a 10-second Undo Send, threaded as a reply where it is one, and filed in Sent. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
 
 ## Run it
 
@@ -20,9 +20,9 @@ bun install
 bun run dev
 ```
 
-**Add an account** with "Add your account" in the sidebar: email, password (many providers need an app password for IMAP; the dialog says where to make one), and the IMAP server, guessed from the address. The password goes to the system keychain (Keychain, Secret Service, Credential Manager); without one, it's kept until you quit. Mail is kept in the app's data folder (`~/.local/share/mantou-mail`, `~/Library/Application Support/Mantou Mail`, `%APPDATA%\Mantou Mail`; `MANTOU_MAIL_HOME` to use another).
+**Add an account** with "Add your account" in the sidebar: email, password (many providers need an app password for IMAP and SMTP; the dialog says where to make one), and the IMAP and SMTP servers, guessed from the address. The password goes to the system keychain (Keychain, Secret Service, Credential Manager); without one, it's kept until you quit. Mail is kept in the app's data folder (`~/.local/share/mantou-mail`, `~/Library/Application Support/Mantou Mail`, `%APPDATA%\Mantou Mail`; `MANTOU_MAIL_HOME` to use another).
 
-**To try it without a real account**, run an IMAP server on this machine with the sample mail, and add `sam@northwind.dev` with password `testpass`, server `127.0.0.1`, port `1143`, username `testuser`:
+**To try it without a real account**, run an IMAP and SMTP server on this machine with the sample mail, and add `sam@northwind.dev` with password `testpass`, IMAP server `127.0.0.1` port `1143`, SMTP server `127.0.0.1` port `1025`, username `testuser` (mail you send to `sam@northwind.dev` arrives in its Inbox):
 
 ```bash
 bun run demo-server

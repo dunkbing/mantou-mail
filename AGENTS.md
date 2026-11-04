@@ -10,9 +10,9 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 | `src/state.ts` | Solid signals and actions (select, move, archive, move to inbox, delete, snooze, labels, star, unread, search, drafts, compose and send, undo); parsing To lines. Knows nothing of views or servers: `onChange(prev, next)` reports the user's changes, `receive()` takes the servers' messages |
 | `src/App.tsx` | The app: layout and keyboard handling |
 | `src/ui/` | The UI, a file per part: `Sidebar`, `Toolbar`, `MessageList`, `Reader` (conversation, reply/snooze/label panel), `Compose` (reply and new-message composers), `Accounts` (the Accounts dialog), `StatusBar`, `Shortcuts`; `common` (avatars, chips, buttons), `icons` (the icon set: use `<Icon name>`, don't draw icons inline), `scroll` (scroll areas), `theme` (colours, shared styles) |
-| `src/mail/` | Real accounts: `remote` (accounts, passwords, the bridge to the state), `imap` (one account's sync over IMAP, with imapflow), `store` (the local copy, SQLite: messages, changes not yet on the server, how much of each folder is kept), `parse` (raw mail to `Message`), `providers` (settings guessed from an address), `secrets` (the OS keychain), `paths` (the data folder) |
+| `src/mail/` | Real accounts: `remote` (accounts, passwords, the outbox, the bridge to the state), `imap` (one account's sync over IMAP, with imapflow), `smtp` (sending: the message as RFC 822, with nodemailer), `store` (the local copy, SQLite: messages, changes not yet on the server, how much of each folder is kept), `parse` (raw mail to `Message`), `providers` (settings guessed from an address), `secrets` (the OS keychain), `paths` (the data folder) |
 | `src/main.tsx` | Entry: the store, the accounts, then `run(() => <App />)` |
-| `tests/` | Bun tests on a headless instance of Mantou's real core; real accounts against an IMAP server in the test process (`tests/server.ts`, hoodiecrow) |
+| `tests/` | Bun tests on a headless instance of Mantou's real core; real accounts against IMAP and SMTP servers in the test process (`tests/server.ts`: hoodiecrow, smtp-server) |
 | `scripts/` | `demo-server`: an IMAP server with the sample mail, to try real accounts locally |
 | `bench/` | `bun run perf`: what the common interactions cost (time, ops, layouts, nodes), sample and 2,000-message mailboxes; results in `docs/performance.md` |
 | `docs/upstream.md` | What the app needs from Mantou: the issues filed (and drafts of any not yet filed), with the workaround in use |
@@ -22,7 +22,7 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 ```bash
 bun install          # mantou-ui from npm, pinned in package.json / bun.lock, with a prebuilt native core
 bun run dev          # the app in a window (on headless Linux: xvfb-run -a bun run dev)
-bun run demo-server  # an IMAP server on 127.0.0.1:1143 with the sample mail (testuser / testpass)
+bun run demo-server  # IMAP on 127.0.0.1:1143 and SMTP on :1025 with the sample mail (testuser / testpass)
 bun test             # headless tests (captures need a GPU adapter; Mesa's lavapipe is fine)
 bun run typecheck    # bun check
 bun run perf         # interaction costs on the real core (not part of bun test)
