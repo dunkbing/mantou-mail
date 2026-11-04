@@ -2,7 +2,7 @@
 
 Problems and gaps found while building the app, with the issue for each in [dunkbing/mantou](https://github.com/dunkbing/mantou/issues) and the workaround in use. Code comments next to each workaround name the issue, so it's easy to find and remove once Mantou ships a fix. A need that can't be filed yet gets drafted here, ready to paste into Mantou's issue template, until someone files it.
 
-The app uses `mantou-ui` 0.2.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
+The app uses `mantou-ui` 0.2.1 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
 
 ## Open
 
@@ -15,7 +15,6 @@ The app uses `mantou-ui` 0.2.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 | `setMenu` while the app is being set up answers `false` and installs nothing (macOS) | bug | [dunkbing/mantou#48](https://github.com/dunkbing/mantou/issues/48) | the menu is set at the first layout (`installMenu` in `src/App.tsx`) |
 | The Edit menu's predefined items (undo, cut, copy, paste, select all) take Cmd+Z/X/C/V/A before an `<Input>` sees them (macOS) | bug | [dunkbing/mantou#49](https://github.com/dunkbing/mantou/issues/49) | the Edit menu has only Find; the inputs handle those keys (`src/ui/menu.ts`) |
 | `showMenu` opens the menu at `height - y` (y counted from the bottom of the window) on macOS | bug | [dunkbing/mantou#51](https://github.com/dunkbing/mantou/issues/51) | the row menu passes `windowHeight - y` on macOS (`menu` in `MessageList`) |
-| A hidden title bar that keeps macOS's traffic lights, with the app's content under them (`frameless` and `<View dragRegion>` are in 0.2.0, but a frameless window has no buttons, and no `win.close()`) | feature | [dunkbing/mantou#52](https://github.com/dunkbing/mantou/issues/52) (and #37's [comments](https://github.com/dunkbing/mantou/issues/37#issuecomment-6637649710)) | the native title bar |
 | Rich text (to show HTML mail, and a formatting composer) | feature | Mantou's [#15](https://github.com/dunkbing/mantou/issues/15) | mail shown as text; the composer takes Markdown and sends it as HTML too (`src/mail/format.ts`) |
 | `<List>` with rows of different heights (in 0.1.7, [#31](https://github.com/dunkbing/mantou/issues/31)) throws when its items get fewer | bug | [dunkbing/mantou#50](https://github.com/dunkbing/mantou/issues/50) | rows rendered a page at a time, more as the scroll nears the end (`MessageList`) |
 
@@ -23,6 +22,7 @@ The app uses `mantou-ui` 0.2.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 
 | Need | Issue | In | What the app uses now |
 |---|---|---|---|
+| A hidden title bar that keeps macOS's traffic lights, and `win.close()` | [#52](https://github.com/dunkbing/mantou/issues/52), [#37](https://github.com/dunkbing/mantou/issues/37) | 0.2.1 | `titleBar: "overlay"` and `win.safeArea` (not used yet: the app keeps the native bar) |
 | Opening a file or a URL with the system's app | [#21](https://github.com/dunkbing/mantou/issues/21) (in part), [#38](https://github.com/dunkbing/mantou/issues/38) | 0.2.0 | `openExternal` (`openWithSystem` in `src/mail/files.ts`) |
 | Setting an `<Input>`'s value left the caret where it was | [#30](https://github.com/dunkbing/mantou/issues/30) | 0.1.7 | `setSelection` after a suggestion is taken (`AddressField` in `src/ui/Compose.tsx`) |
 | `right`/`bottom` on absolute views resolve against the window | [#1](https://github.com/dunkbing/mantou/issues/1) | 0.1.2 | plain `position: "absolute"` |
