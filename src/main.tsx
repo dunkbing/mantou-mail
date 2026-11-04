@@ -7,10 +7,13 @@ import { dataDir } from "./mail/paths";
 import { Remote } from "./mail/remote";
 import { osSecrets } from "./mail/secrets";
 import { Store } from "./mail/store";
+import { Blobs } from "./mail/blobs";
+import { join } from "node:path";
 import { createMail } from "./state";
 
 useRealTime();
-const remote = new Remote(new Store(dataDir()), osSecrets);
+const dir = dataDir();
+const remote = new Remote(new Store(dir), osSecrets, { blobs: new Blobs(join(dir, "attachments")) });
 const start = remote.initial();
 const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
 void remote.attach(mail);

@@ -1,6 +1,7 @@
 // Small pieces used all over: avatars, chips, key hints, buttons.
-import { For, Text, View } from "mantou-ui";
-import { LABELS, type Message } from "../data";
+import { For, Show, Text, View } from "mantou-ui";
+import { Icon } from "./icons";
+import { LABELS, type Attachment, type Message } from "../data";
 import { SEND_KEYS, C, AVATAR_COLORS } from "./theme";
 
 export function initials(name: string) {
@@ -61,6 +62,31 @@ export function TextButton(props: { label: string; onPress: () => void }) {
   return (
     <View style={{ height: 32, flexShrink: 0, paddingLeft: 10, paddingRight: 10, justifyContent: "center", borderRadius: 7 }} onPress={props.onPress}>
       <Text style={{ fontSize: 13, fontWeight: 500, color: C.secondary }}>{props.label}</Text>
+    </View>
+  );
+}
+
+/** 1.2 MB, 340 KB, 12 B. */
+export function humanSize(bytes: number): string {
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(bytes >= 1e7 ? 0 : 1)} MB`;
+  if (bytes >= 1e3) return `${Math.round(bytes / 1e3)} KB`;
+  return `${bytes} B`;
+}
+
+/** An attachment: its name and size; pressing opens it, × (when given) takes it off a draft. */
+export function AttachmentChip(props: { attachment: Attachment; onPress?: () => void; onRemove?: () => void }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, flexShrink: 1, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={props.onPress}>
+      <Icon name="paperclip" size={14} color={C.secondary} />
+      <View style={{ flexShrink: 1, gap: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: 500, color: C.text, maxLines: 1, maxWidth: 240 }}>{props.attachment.name}</Text>
+        <Text style={{ fontSize: 11, color: C.muted }}>{humanSize(props.attachment.size)}</Text>
+      </View>
+      <Show when={props.onRemove}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, justifyContent: "center", alignItems: "center" }} onPress={(e) => (e.stopPropagation(), props.onRemove!())}>
+          <Icon name="close" size={14} color={C.muted} />
+        </View>
+      </Show>
     </View>
   );
 }

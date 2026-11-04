@@ -3,7 +3,11 @@
 // after" (Mail's onChange) and become server changes here; the servers'
 // messages arrive through Mail.receive.
 import { createSignal } from "mantou-ui";
-import { SAMPLE_ACCOUNTS, sampleMessages, type Folder, type Message } from "../data";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { SAMPLE_ACCOUNTS, sampleMessages, type Attachment, type Folder, type Message } from "../data";
+import { Blobs } from "./blobs";
+import { downloadsDir, freeName, openWithSystem, pickFiles, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
 import { AccountSync, checkLogin, type SyncStatus } from "./imap";
 import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
@@ -26,6 +30,7 @@ export interface NewAccount {
 
 export class Remote {
   private syncs = new Map<string, AccountSync>();
+  readonly blobs: Blobs;
   /** Messages in the outbox, by id: their send timers. */
   private outbox = new Map<number, ReturnType<typeof setTimeout>>();
   private mail: Mail | null = null;
@@ -38,8 +43,18 @@ export class Remote {
   /** Each account's sync status, by account id. */
   readonly statuses = this.statusSignal[0];
 
-  constructor(readonly store: Store, readonly secrets: Secrets, private options: { expungeDelay?: number; window?: number; undoSend?: number } = {}) {
+  constructor(readonly store: Store, readonly secrets: Secrets, private options: {
+      expungeDelay?: number;
+      window?: number;
+      undoSend?: number;
+      /** Where attachments' bytes are kept (default: a folder in the system's temp folder). */
+      blobs?: Blobs;
+      /** Where opened attachments are saved (default: Downloads), and what opens them (default: the system). */
+      downloads?: string;
+      open?: (path: string) => void;
+    } = {},) {
     this.lastId = store.maxId();
+    this.blobs = options.blobs ?? new Blobs(join(tmpdir(), "mantou-mail-attachments"));
     this.listSignal[1](store.accounts());
   }
 
@@ -104,7 +119,8 @@ export class Remote {
     const original = m.outbox.replyTo === undefined ? undefined : mail.messages().find((x) => x.id === m.outbox!.replyTo);
     let raw: Buffer;
     try {
-      raw = await compose(m, original);
+      const files = await Promise.all((m.attachments ?? []).map(async (a) => ({ name: a.name, type: a.type, content: await this.bytesOf(a) })));
+      raw = await compose(m, original, files);
       await sendSmtp(smtp, password, m, raw);
     } catch (e) {
       return fail((e as Error).message);
@@ -114,6 +130,53 @@ export class Remote {
     mail.note(`Sent to ${names}`);
     await this.syncs.get(cfg.id)?.fileSent(raw, !savesSent(smtp.host)).catch(() => {});
   }
+
+  // ------------------------------------------------------------ attachments
+
+  /**
+   * An attachment's bytes: sample mail's text, the blob store, or the server
+   * (downloaded once, then kept in the blob store, so it opens offline next time).
+   * `message` is the one it's on, if not `a.from` (forwarded).
+   */
+  async bytesOf(a: Attachment, message?: Message): Promise<Uint8Array> {
+    if (a.text !== undefined) return new TextEncoder().encode(a.text);
+    if (a.blob && (await this.blobs.has(a.blob))) return this.blobs.get(a.blob);
+    const on = message ?? this.mail?.messages().find((m) => m.id === a.from);
+    const sync = on && this.syncs.get(on.account);
+    if (!on || !a.part || !sync) throw new Error(`“${a.name}” isn't here, and its message isn't on a server this app can reach`);
+    const bytes = await sync.download(on.id, a.part);
+    const blob = await this.blobs.put(bytes);
+    // Remember where the bytes are now, on the message they came with.
+    const cur = this.mail?.messages().find((m) => m.id === on.id);
+    if (cur?.attachments) {
+      const attachments = cur.attachments.map((x) => (x.part === a.part && x.name === a.name ? { ...x, blob } : x));
+      this.mail?.patchQuiet(cur.id, { attachments });
+      if (cur.remote || this.isReal(cur.account)) this.store.put(this.mail!.messages().filter((m) => m.id === cur.id));
+    }
+    return bytes;
+  }
+
+  /** Saves an attachment in Downloads and opens it with the system's app; resolves to where it went. */
+  async openAttachment(message: Message, a: Attachment): Promise<string> {
+    const bytes = await this.bytesOf(a, message);
+    const path = freeName(this.options.downloads ?? downloadsDir(), a.name);
+    await Bun.write(path, bytes);
+    (this.options.open ?? openWithSystem)(path);
+    return path;
+  }
+
+  /** Files from this computer as attachments: their bytes go to the blob store, so the draft doesn't depend on them staying put. */
+  async attachFiles(paths: string[]): Promise<Attachment[]> {
+    return Promise.all(paths.map(async (path) => {
+      const file = Bun.file(path);
+      if (!(await file.exists())) throw new Error(`There's no file at ${path}`);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return { name: basename(path), type: typeOf(path), size: bytes.length, blob: await this.blobs.put(bytes) };
+    }));
+  }
+
+  /** The system's file picker (null where there's none: the composer then asks for a path). */
+  pickFiles = pickFiles;
 
   /** Waits for the outbox to empty (tests). */
   async outboxEmpty() {

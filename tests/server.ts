@@ -14,6 +14,8 @@ export interface Mail {
   inReplyTo?: string;
   headers?: string;
   flags?: string[];
+  /** The whole message, as sent (then the fields above, but flags, aren't used). */
+  raw?: string;
 }
 
 export const raw = (m: Mail) =>
@@ -32,7 +34,7 @@ export const raw = (m: Mail) =>
     "",
   ].join("\r\n");
 
-const box = (msgs: Mail[] = []) => ({ messages: msgs.map((m) => ({ raw: raw(m), flags: m.flags ?? [] })) });
+const box = (msgs: Mail[] = []) => ({ messages: msgs.map((m) => ({ raw: m.raw ?? raw(m), flags: m.flags ?? [] })) });
 
 export async function imapServer(folders: { inbox?: Mail[]; archive?: Mail[]; sent?: Mail[]; trash?: Mail[]; drafts?: Mail[] }) {
   const server = hoodiecrow({

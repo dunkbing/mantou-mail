@@ -1,10 +1,12 @@
 // The reader: the selected message's conversation, and the panel under it
 // (reply, snooze, labels).
 import { For, Show, Text, View, createEffect, createSignal, on, Scroll, type Node } from "mantou-ui";
-import { LABELS, daysSince, longDate, shortDate, type Message } from "../data";
+import { LABELS, daysSince, longDate, shortDate, type Attachment, type Message } from "../data";
+import { homedir } from "node:os";
+import type { Remote } from "../mail/remote";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
-import { Avatar, Chip, LabelChips, Kbd } from "./common";
+import { Avatar, Chip, LabelChips, Kbd, AttachmentChip } from "./common";
 import { ReplyComposer } from "./Compose";
 
 export function displayName(mail: Mail, msg: Message) {
@@ -12,8 +14,16 @@ export function displayName(mail: Mail, msg: Message) {
 }
 
 /** One message of the conversation, open. */
-export function OpenMessage(props: { mail: Mail; message: Message; onPress?: () => void }) {
+export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Message; onPress?: () => void }) {
   const msg = () => props.message;
+  const open = (a: Attachment) => {
+    if (!props.remote) return props.mail.note("Attachments open in the app, with its data folder");
+    props.mail.note(`Opening “${a.name}”…`);
+    props.remote.openAttachment(msg(), a).then(
+      (path) => props.mail.note(`Saved “${a.name}” to ${path.replace(homedir(), "~")}`),
+      (e: Error) => props.mail.note(`Couldn't open “${a.name}”: ${e.message}`),
+    );
+  };
   const to = () => props.mail.accountOf(msg().account)?.email ?? "";
   return (
     <View style={{ gap: 16 }}>
@@ -28,6 +38,11 @@ export function OpenMessage(props: { mail: Mail; message: Message; onPress?: () 
       <View style={{ gap: 14 }}>
         <For each={msg().body}>{(p) => <Text style={{ fontSize: 14, lineHeight: 1.6, color: "#1f2937" }}>{p}</Text>}</For>
       </View>
+      <Show when={msg().attachments?.length}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <For each={msg().attachments}>{(a) => <AttachmentChip attachment={a} onPress={() => open(a)} />}</For>
+        </View>
+      </Show>
     </View>
   );
 }
@@ -45,7 +60,7 @@ export function FoldedMessage(props: { mail: Mail; message: Message; onPress: ()
   );
 }
 
-export function Panel(props: { mail: Mail }) {
+export function Panel(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
   const s = () => m.selected()!;
   const option = (key: string, text: string, onPress: () => void, active = false, dot?: string) => (
@@ -71,7 +86,7 @@ export function Panel(props: { mail: Mail }) {
           <Text style={[caption, { fontWeight: 500 }]}>{m.panel() === "reply" ? "Esc keeps a draft" : "Esc to close"}</Text>
         </View>
         <Show when={m.panel() === "reply"}>
-          <ReplyComposer mail={m} />
+          <ReplyComposer mail={m} remote={props.remote} />
         </Show>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           <Show when={m.panel() === "snooze"}>
@@ -86,7 +101,7 @@ export function Panel(props: { mail: Mail }) {
   );
 }
 
-export function Reader(props: { mail: Mail }) {
+export function Reader(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
   let scroll: Node | undefined;
   /** Messages of the conversation opened by pressing them (the selected one is always open). */
@@ -132,7 +147,7 @@ export function Reader(props: { mail: Mail }) {
                 <>
                   <View style={hline} />
                   <Show when={isOpen(msg)} fallback={<FoldedMessage mail={m} message={msg} onPress={() => toggle(msg.id)} />}>
-                    <OpenMessage mail={m} message={msg} onPress={msg.id === m.selected()?.id ? undefined : () => toggle(msg.id)} />
+                    <OpenMessage mail={m} remote={props.remote} message={msg} onPress={msg.id === m.selected()?.id ? undefined : () => toggle(msg.id)} />
                   </Show>
                 </>
               )}
@@ -140,7 +155,7 @@ export function Reader(props: { mail: Mail }) {
           </View>
         </Scroll>
         <Show when={m.panel()}>
-          <Panel mail={m} />
+          <Panel mail={m} remote={props.remote} />
         </Show>
       </Show>
     </View>

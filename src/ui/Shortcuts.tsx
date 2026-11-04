@@ -4,7 +4,7 @@ import { SEND_KEYS, C } from "./theme";
 import { Kbd } from "./common";
 
 export const SHORTCUTS: [string, string][][] = [
-  [["J / K", "Older / newer message"], ["1 / 2", "Important / Other"], ["/", "Search"], ["C", "Compose"], ["R", "Reply"], [SEND_KEYS, "Send"], ["Enter", "Open a draft"], ["Esc", "Close (keeps a draft), leave search"], ["?", "These shortcuts"]],
+  [["J / K", "Older / newer message"], ["1 / 2", "Important / Other"], ["/", "Search"], ["C", "Compose"], ["R", "Reply"], ["F", "Forward"], [SEND_KEYS, "Send"], ["Enter", "Open a draft"], ["Esc", "Close (keeps a draft), leave search"], ["?", "These shortcuts"]],
   [["E", "Archive"], ["I", "Move to Inbox"], ["#", "Delete"], ["H", "Snooze"], ["L", "Labels"], ["S", "Star"], ["U", "Mark read / unread"], ["Z", "Undo"]],
 ];
 

@@ -7,6 +7,10 @@ import { App } from "../src/App";
 import { Remote } from "../src/mail/remote";
 import { memorySecrets } from "../src/mail/secrets";
 import { Store } from "../src/mail/store";
+import { Blobs } from "../src/mail/blobs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createMail, type Mail } from "../src/state";
 import { imapServer, until } from "./server";
 
@@ -139,4 +143,50 @@ test("the end of a real folder's list offers its older mail, and pressing it get
   await until(() => mail.list().length === 8, "the older mail", () => h.step());
   expect(texts(h)).toContain("Message 1");
   expect(texts(h)).not.toContain("Load older messages");
+});
+
+test("attachments in the app: open one, forward it with f, attach a file by its path, take one off", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const opened: string[] = [];
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { blobs: new Blobs(join(dir, "blobs")), downloads: dir, open: (p) => opened.push(p) });
+  remote.pickFiles = async () => null; // no picker on this system: the composer asks for a path
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  await remote.attach(mail);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  mount(h.ui, () => <App mail={mail} remote={remote} />);
+  h.step();
+
+  h.press(text(h, "Q4 planning — draft OKRs attached"));
+  h.press(text(h, "Q4 OKRs (draft).md"));
+  await until(() => opened.length === 1, "the attachment to open", () => h.step());
+  expect(await Bun.file(opened[0]).text()).toStartWith("# Q4 OKRs (draft)");
+  expect(texts(h).some((t) => t.startsWith("Saved “Q4 OKRs (draft).md” to "))).toBe(true);
+
+  h.key("f");
+  expect(mail.composing()).toBe(true);
+  expect(mail.draft().subject).toBe("Fwd: Q4 planning — draft OKRs attached");
+  expect(texts(h).filter((t) => t === "Q4 OKRs (draft).md").length).toBe(2); // in the reader, and on the forward
+  const extra = join(dir, "agenda.txt");
+  await Bun.write(extra, "1. OKRs\n2. Hiring\n");
+  h.press(text(h, "Attach"));
+  await until(() => !!h.focused() && h.rect(h.focused()!)![0] > 500, "the path field", () => h.step());
+  h.type(extra);
+  h.key("Enter");
+  await until(() => texts(h).includes("agenda.txt"), "the new attachment", () => h.step());
+  expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md", "agenda.txt"]);
+  const removes = [...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === "×");
+  h.press(removes.at(-1)!); // agenda.txt's
+  expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md"]);
+  h.press(inputs(h)[1]); // To
+  h.type("priya@northwind.dev");
+  h.press(text(h, "Send"));
+  expect(mail.composing()).toBe(false);
+  h.press(text(h, "Sent"));
+  expect(mail.list()[0]).toMatchObject({ subject: "Fwd: Q4 planning — draft OKRs attached", attachments: [{ name: "Q4 OKRs (draft).md" }] });
 });

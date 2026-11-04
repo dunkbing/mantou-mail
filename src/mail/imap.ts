@@ -4,7 +4,7 @@
 // server in order (kept while offline, sent again on reconnect).
 import { ImapFlow, type ListResponse } from "imapflow";
 import type { Folder, Message } from "../data";
-import { parseMessage } from "./parse";
+import { attachmentsOf, parseMessage, type StructurePart } from "./parse";
 import { isLocalHost, type ImapSettings } from "./providers";
 import type { AccountConfig, Store } from "./store";
 
@@ -319,7 +319,7 @@ export class AccountSync {
         const big = new Set(chunk.filter((l) => l.size > 1_000_000).map((l) => l.uid));
         for (const [uids, source] of [[chunk.filter((l) => !big.has(l.uid)), true], [chunk.filter((l) => big.has(l.uid)), { maxLength: 300_000 }]] as const) {
           if (!uids.length) continue;
-          for await (const f of c.fetch(uids.map((l) => l.uid).join(","), { uid: true, flags: true, internalDate: true, threadId: true, source }, { uid: true })) {
+          for await (const f of c.fetch(uids.map((l) => l.uid).join(","), { uid: true, flags: true, internalDate: true, threadId: true, bodyStructure: true, source }, { uid: true })) {
             if (!f.source) continue;
             const p = await parseMessage(f.source, {
               serverThreadId: f.threadId,
@@ -343,6 +343,7 @@ export class AccountSync {
               thread: p.threadKey,
               remote: { path, uid: f.uid },
               messageId: p.messageId,
+              attachments: attachmentsOf(f.bodyStructure as StructurePart | undefined),
             });
           }
         }
@@ -483,6 +484,27 @@ export class AccountSync {
       await this.idleOnInbox(c);
     });
     this.emit();
+  }
+
+  /** One MIME part of a message on the server, decoded (an attachment being opened or forwarded). */
+  async download(id: number, part: string): Promise<Uint8Array> {
+    const m = this.byId.get(id);
+    const c = this.client;
+    if (!m?.remote) throw new Error("this message isn't on the server any more");
+    if (!c) throw new Error(`${this.cfg.email} is offline`);
+    const { path, uid } = m.remote;
+    return this.run(async () => {
+      const lock = await c.getMailboxLock(path);
+      try {
+        const { content } = await c.download(String(uid), part, { uid: true });
+        if (!content) throw new Error("the server sent no content for this attachment");
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of content) chunks.push(chunk as Uint8Array);
+        return new Uint8Array(Buffer.concat(chunks));
+      } finally {
+        lock.release();
+      }
+    });
   }
 
   /** Keeps `more` older messages of a folder, and fetches them now. */

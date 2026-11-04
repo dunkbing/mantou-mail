@@ -27,6 +27,8 @@ Latest run: 4 November 2026, mantou-ui 0.1.3, Linux, with `<Scroll>` (the core s
 | Icons drawn from views ([dunkbing/mantou#8](https://github.com/dunkbing/mantou/issues/8)) | +77 nodes and about +660 ops at mount; interactions unchanged |
 | mantou-ui 0.1.1 → 0.1.3: `<Scroll>` instead of negative margins, and the text-cost fix ([#9](https://github.com/dunkbing/mantou/issues/9)) | a wheel turn: 2 ops and a relayout → no ops and no layout (the core scrolls); `j` 10.4 → 5.6 ms; switch mailbox 31 → 19 ms; mount 58 → 31 ms |
 
+Attachments and Forward (4 November) added about 8 nodes and 3% more ops at mount (a paperclip check per row, the Forward button); interactions unchanged. Mount times here vary ±10 ms between runs.
+
 ## What's Mantou's
 
 - **[dunkbing/mantou#19](https://github.com/dunkbing/mantou/issues/19)** (a virtualised list): until it ships, the list renders 60 rows at a time; every rendered row is about 8 nodes and 53 ops. Fixed in 0.1.3: [#9](https://github.com/dunkbing/mantou/issues/9) (text laid out for every node, and the cache past 4,096) and [#5](https://github.com/dunkbing/mantou/issues/5) (scrolling re-laid out the content).

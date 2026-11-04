@@ -1,7 +1,7 @@
 // From what IMAP gives (envelope, flags, the raw message) to the app's
 // Message fields. Pure functions, so they're easy to test.
 import { simpleParser, type AddressObject } from "mailparser";
-import type { Contact } from "../data";
+import type { Attachment, Contact } from "../data";
 
 export interface Parsed {
   from: Contact;
@@ -91,4 +91,39 @@ export async function parseMessage(source: Buffer | string, opts: { serverThread
     messageId: p.messageId ? angle(p.messageId) : undefined,
     threadKey: threadKeyOf({ serverThreadId: opts.serverThreadId, messageId: p.messageId, inReplyTo: p.inReplyTo, references: refs }, opts.fallbackKey),
   };
+}
+
+/** A MIME part as imapflow describes it (FETCH BODYSTRUCTURE). */
+export interface StructurePart {
+  part?: string;
+  type?: string;
+  parameters?: Record<string, string>;
+  dispositionParameters?: Record<string, string>;
+  disposition?: string;
+  id?: string;
+  encoding?: string;
+  size?: number;
+  childNodes?: StructurePart[];
+}
+
+/**
+ * A message's attachments from its structure: parts sent as attachments, and
+ * named parts that aren't the text. Inline images with a Content-ID belong
+ * to the HTML, not the list. Nothing is downloaded: each keeps its part.
+ */
+export function attachmentsOf(root: StructurePart | undefined): Attachment[] {
+  const out: Attachment[] = [];
+  const walk = (n: StructurePart) => {
+    if (n.childNodes?.length) return n.childNodes.forEach(walk);
+    const type = (n.type ?? "application/octet-stream").toLowerCase();
+    const name = n.dispositionParameters?.filename ?? n.parameters?.name;
+    const inlineImage = n.disposition === "inline" && !!n.id;
+    const isAttachment = n.disposition === "attachment" || (!!name && !/^text\/(plain|html)$/.test(type) && !inlineImage);
+    if (!isAttachment || n === root) return;
+    // A base64 part's bytes are about 3/4 of its encoded size.
+    const size = Math.round((n.size ?? 0) * ((n.encoding ?? "").toLowerCase() === "base64" ? 0.74 : 1));
+    out.push({ name: name || `attachment ${out.length + 1}`, type, size, part: n.part ?? "1" });
+  };
+  if (root) walk(root);
+  return out;
 }

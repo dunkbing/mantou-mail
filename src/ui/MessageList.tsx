@@ -37,6 +37,9 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
             <Text style={{ flexShrink: 0, fontSize: 12, color: C.muted }}>{String(size())}</Text>
           </Show>
           <View style={{ flexGrow: 1 }} />
+          <Show when={msg().attachments?.length}>
+            <Icon name="paperclip" size={12} color={C.muted} />
+          </Show>
           <Show when={msg().starred}>
             <Text style={{ fontSize: 12, color: C.star }}>★</Text>
           </Show>

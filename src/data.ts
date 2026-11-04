@@ -52,6 +52,23 @@ export interface Contact {
   email: string;
 }
 
+/** A file that came with a message, or goes with one. */
+export interface Attachment {
+  name: string;
+  /** Its MIME type, like application/pdf. */
+  type: string;
+  /** In bytes (for mail on a server, as the server reports it). */
+  size: number;
+  /** Its bytes in the local blob store (src/mail/blobs.ts), by content hash: files attached here, and ones opened before. */
+  blob?: string;
+  /** For mail on a server: the MIME part to download it from, when it's opened. */
+  part?: string;
+  /** Sample mail only: the file's content. */
+  text?: string;
+  /** Forwarded: the message it's on (its `part` is downloaded from there when sent). */
+  from?: number;
+}
+
 export interface Message {
   id: number;
   account: string;
@@ -78,6 +95,7 @@ export interface Message {
   remote?: { path: string; uid: number };
   /** The Message-ID header, without the angle brackets. */
   messageId?: string;
+  attachments?: Attachment[];
   /** Written here and waiting to be sent (Undo Send can still take it back), with the message it answers. */
   outbox?: { replyTo?: number };
 }
@@ -94,7 +112,7 @@ function msg(m: Omit<Message, "id" | "unread" | "starred" | "important" | "label
 
 export function sampleMessages(): Message[] {
   next = 1;
-  return [
+  return withSizes([
     msg({
       account: "work", from: { name: "Priya Shah", email: "priya@northwind.dev" }, date: ago(0, 0, 18), unread: true, labels: ["design"], thread: 101,
       subject: "Onboarding flow: final review before Thursday",
@@ -124,11 +142,13 @@ export function sampleMessages(): Message[] {
         "Please add comments directly in the doc by Wednesday end of day. We'll finalise in Thursday's planning meeting.",
         "Daniel",
       ],
+      attachments: [{ name: "Q4 OKRs (draft).md", type: "text/markdown", size: 0, text: "# Q4 OKRs (draft)\n\n1. Ship the new onboarding: day-7 retention 38% to 50%.\n2. Halve p95 sync latency: 840 ms to 420 ms.\n3. Grow weekly active teams by 15%.\n" }],
     }),
     msg({
       account: "work", from: { name: "Stripe", email: "receipts@stripe.com" }, date: ago(0, 3, 30), important: false, labels: ["finance"],
       subject: "Your receipt from Figma #2231-7746",
       body: ["Amount paid: $180.00", "Date paid: November 3, 2026", "Payment method: Visa •••• 4242", "If you have any questions, contact us at support@figma.com."],
+      attachments: [{ name: "Receipt-2231-7746.txt", type: "text/plain", size: 0, text: "Figma, Inc.\nReceipt #2231-7746\nProfessional plan, 1 editor, November 2026\nAmount paid: $180.00 (Visa •••• 4242)\n" }],
     }),
     msg({
       account: "personal", from: { name: "Alex Kim", email: "alex.kim@hey.com" }, date: ago(0, 4, 0), unread: true, labels: ["travel"],
@@ -219,7 +239,7 @@ export function sampleMessages(): Message[] {
       subject: "Renewal terms for 2027",
       body: ["Hi Sam,", "Our contract is up for renewal in January. Before we talk numbers, could you send over our usage for the last twelve months?", "Best,\nJonas"],
     }),
-    msg({ account: "work", folder: "sent", thread: 103, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, to: [{ name: "Jonas Weber", email: "jonas@acme.io" }], date: ago(5), subject: "Re: Renewal terms for 2027", body: ["Hi Jonas, usage for the last twelve months is attached: 212 active seats on average, peaking at 240 in September.", "Happy to walk through it on a call."] }),
+    msg({ account: "work", folder: "sent", thread: 103, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, to: [{ name: "Jonas Weber", email: "jonas@acme.io" }], date: ago(5), subject: "Re: Renewal terms for 2027", body: ["Hi Jonas, usage for the last twelve months is attached: 212 active seats on average, peaking at 240 in September.", "Happy to walk through it on a call."], attachments: [{ name: "northwind-usage-2026.csv", type: "text/csv", size: 0, text: "month,active seats\n2025-11,198\n2025-12,201\n2026-01,204\n2026-02,207\n2026-03,209\n2026-04,210\n2026-05,212\n2026-06,214\n2026-07,219\n2026-08,231\n2026-09,240\n2026-10,238\n" }] }),
     msg({
       account: "work", folder: "archive", thread: 101, from: { name: "Priya Shah", email: "priya@northwind.dev" }, date: ago(4, 6), labels: ["design"],
       subject: "Onboarding flow: first pass",
@@ -228,8 +248,12 @@ export function sampleMessages(): Message[] {
     msg({ account: "work", folder: "sent", thread: 101, from: { name: "Sam Rivera", email: "sam@northwind.dev" }, to: [{ name: "Priya Shah", email: "priya@northwind.dev" }], date: ago(4, 3), subject: "Re: Onboarding flow: first pass", body: ["After, I think. Nobody should see an empty picker on day one."] }),
     msg({ account: "work", folder: "archive", from: { name: "Daniel Okafor", email: "daniel@northwind.dev" }, date: ago(12), subject: "Q3 retro notes", body: ["Notes from the retro are in the wiki."] }),
     msg({ account: "personal", folder: "snoozed", snoozedUntil: "Tomorrow, 08:00", from: { name: "Alex Kim", email: "alex.kim@hey.com" }, date: ago(1, 9), subject: "Plant-sitting next weekend?", body: ["Could you water the plants while we're away? Keys are under the blue pot."] }),
-  ];
+  ]);
 }
+
+/** Sample attachments carry their text; their size is its length in UTF-8. */
+const withSizes = (ms: Message[]) => ms.map((m) => (m.attachments ? { ...m, attachments: m.attachments.map((a) => ({ ...a, size: a.text ? new TextEncoder().encode(a.text).length : a.size })) } : m));
+
 
 /** "09:12" today, "Yesterday", a weekday within a week, else "Oct 28". */
 export function shortDate(d: Date): string {

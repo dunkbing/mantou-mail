@@ -13,8 +13,15 @@ export function newMessageId(from: string): string {
   return `${crypto.randomUUID()}@${from.split("@")[1] ?? "mantou.mail"}`;
 }
 
+/** An attachment's bytes, ready to go. */
+export interface OutgoingFile {
+  name: string;
+  type: string;
+  content: Uint8Array;
+}
+
 /** The message as sent: RFC 822 bytes, with In-Reply-To and References when it answers another. */
-export async function compose(m: Message, original?: Message): Promise<Buffer> {
+export async function compose(m: Message, original?: Message, files: OutgoingFile[] = []): Promise<Buffer> {
   const refs = original?.messageId ? `<${original.messageId}>` : undefined;
   return new MailComposer({
     from: address(m.from),
@@ -26,6 +33,7 @@ export async function compose(m: Message, original?: Message): Promise<Buffer> {
     inReplyTo: refs,
     references: refs,
     headers: { "X-Mailer": "Mantou Mail" },
+    attachments: files.map((f) => ({ filename: f.name, contentType: f.type, content: Buffer.from(f.content) })),
   })
     .compile()
     .build();

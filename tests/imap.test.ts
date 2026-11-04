@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { Remote } from "../src/mail/remote";
 import { memorySecrets } from "../src/mail/secrets";
 import { Store } from "../src/mail/store";
+import { Blobs } from "../src/mail/blobs";
 import { createMail, type Mail } from "../src/state";
 import { imapServer, until } from "./server";
 
@@ -264,4 +265,76 @@ test("a message that can't be sent goes back to Drafts, with the reason", async 
   await remote.outboxEmpty();
   expect(mail.messages().find((m) => m.subject === "Lisbon")).toMatchObject({ folder: "drafts", outbox: undefined, draft: { to: "alex@example.com" } });
   expect(mail.status()).toMatch(/^Couldn't send “Lisbon”: .*refused the connection.*It's in Drafts\.$/);
+});
+
+// ---------------------------------------------------------------- attachments
+
+const PDF = "%PDF-1.4\n% a small test file\n";
+async function withAttachment() {
+  const MailComposer = (await import("nodemailer/lib/mail-composer")).default;
+  return (await new MailComposer({
+    from: "Daniel Okafor <daniel@example.com>", to: "testuser@example.com", subject: "Q4 OKRs", messageId: "<okrs@example.com>",
+    date: new Date("2026-11-03T08:00:00Z"), text: "Draft attached.",
+    attachments: [{ filename: "q4-okrs.pdf", content: Buffer.from(PDF), contentType: "application/pdf" }],
+  }).compile().build()).toString();
+}
+
+async function attachmentEnv() {
+  const server = await imapServer({ inbox: [{ from: "", subject: "", body: "", raw: await withAttachment() }] });
+  cleanup.push(() => server.close());
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const opened: string[] = [];
+  const store = new Store(dir);
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { undoSend: 20, blobs: new Blobs(join(dir, "blobs")), downloads: dir, open: (p) => opened.push(p) });
+  cleanup.push(() => remote.stop());
+  const mail = createMail([], { accounts: [], onChange: remote.onChange });
+  await remote.attach(mail);
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings, sender: "Test User" });
+  await remote.syncOf(a.id)!.firstSync;
+  return { server, remote, mail, dir, opened };
+}
+
+test("a received attachment is listed from the message's structure, and downloaded when it's opened", async () => {
+  const { remote, mail, dir, opened } = await attachmentEnv();
+  const m = mail.list()[0];
+  expect(m.attachments).toEqual([{ name: "q4-okrs.pdf", type: "application/pdf", size: expect.any(Number), part: "2" }]);
+  expect(Math.abs(m.attachments![0].size - PDF.length)).toBeLessThan(10); // from the encoded size, not a download
+  const path = await remote.openAttachment(m, m.attachments![0]);
+  expect(path).toBe(join(dir, "q4-okrs.pdf"));
+  expect(await Bun.file(path).text()).toBe(PDF);
+  expect(opened).toEqual([path]);
+  expect(mail.list()[0].attachments![0].blob).toMatch(/^[0-9a-f]{64}$/); // kept: it opens offline next time
+  expect(await remote.openAttachment(mail.list()[0], mail.list()[0].attachments![0])).toBe(join(dir, "q4-okrs (2).pdf"));
+});
+
+test("sending with an attachment, and forwarding one that's still on the server", async () => {
+  const { server, remote, mail, dir } = await attachmentEnv();
+  const file = join(dir, "usage.csv");
+  await Bun.write(file, "month,seats\n2026-10,238\n");
+  mail.compose();
+  mail.editDraft({ to: "jonas@example.com", subject: "Usage", body: "Attached." });
+  mail.addAttachments(await remote.attachFiles([file]));
+  expect(mail.draft().attachments).toMatchObject([{ name: "usage.csv", type: "text/csv", size: 24 }]);
+  mail.send();
+  await until(() => server.smtp.received.length === 1, "the message with its attachment");
+  expect(server.smtp.received[0].raw).toMatch(/Content-Disposition: attachment; filename=usage\.csv/);
+  expect(server.smtp.received[0].raw).toContain(Buffer.from("month,seats\n2026-10,238\n").toString("base64"));
+
+  mail.open({ kind: "all" });
+  mail.select(mail.list().find((m) => m.subject === "Q4 OKRs")!.id);
+  mail.forward();
+  expect(mail.composing()).toBe(true);
+  expect(mail.draft()).toMatchObject({ subject: "Fwd: Q4 OKRs", to: "" });
+  expect(mail.draft().body).toContain("---------- Forwarded message ----------\nFrom: Daniel Okafor <daniel@example.com>");
+  expect(mail.draft().body).toContain("Draft attached.");
+  mail.editDraft({ to: "priya@example.com" });
+  mail.send();
+  await until(() => server.smtp.received.length === 2, "the forward");
+  const fwd = server.smtp.received[1].raw;
+  expect(fwd).toContain("Subject: Fwd: Q4 OKRs");
+  expect(fwd).toMatch(/filename=q4-okrs\.pdf/);
+  expect(fwd).toContain(Buffer.from(PDF).toString("base64")); // downloaded from the server's copy to go along
+  await remote.outboxEmpty();
 });

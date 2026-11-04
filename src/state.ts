@@ -1,7 +1,10 @@
 // Mantou Mail's state: Solid signals and the actions the UI and the keyboard
 // share. Nothing here knows about views.
 import { batch, createMemo, createSignal } from "mantou-ui";
-import { LABELS, SAMPLE_ACCOUNTS, now, sampleMessages, threadOf, type Account, type Contact, type Folder, type Message } from "./data";
+import { LABELS, SAMPLE_ACCOUNTS, longDate, now, sampleMessages, threadOf, type Account, type Attachment, type Contact, type Folder, type Message } from "./data";
+
+/** What most servers take in one message (attachments are about a third bigger once encoded). */
+const MAX_SEND = 25_000_000;
 
 export type Mailbox =
   | { kind: "all" }
@@ -77,6 +80,7 @@ export interface Draft {
   subject: string;
   body: string;
   replyTo?: number;
+  attachments?: Attachment[];
 }
 
 const EMAIL = /^[^\s@<>,]+@[^\s@<>,]+\.[^\s@<>,]+$/;
@@ -203,7 +207,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   const patchQuiet = (id: number, p: Partial<Message>) => setMessagesRaw(messages().map((m) => (m.id === id ? { ...m, ...p } : m)));
 
   /** Whether the draft has anything the user typed (a reply's To and Subject come filled in). */
-  const typed = (d: Draft) => !!d.body.trim() || (d.kind === "new" && !!(d.to.trim() || d.subject.trim()));
+  const typed = (d: Draft) => !!d.body.trim() || !!d.attachments?.length || (d.kind === "new" && !!(d.to.trim() || d.subject.trim()));
 
   /** Keeps the draft in Drafts (or drops its saved copy when it's empty). Not an undo step. */
   function saveDraft(): boolean {
@@ -218,7 +222,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       id, account: d.account, folder: "drafts", from: fromAccount(d.account),
       to: parseRecipients(d.to, contacts()).ok, subject: d.subject, body: paragraphs(d.body), date: now(),
       unread: false, starred: false, important: true, labels: [],
-      thread: original ? threadOf(original) : undefined, draft: { to: d.to, replyTo: d.replyTo },
+      thread: original ? threadOf(original) : undefined, draft: { to: d.to, replyTo: d.replyTo }, attachments: d.attachments?.length ? d.attachments : undefined,
     };
     setMessages(d.id === null ? [...messages(), saved] : messages().map((m) => (m.id === id ? saved : m)));
     setDraft({ ...d, id });
@@ -248,7 +252,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   function draftFrom(msg: Message): Draft {
     return {
       kind: msg.draft?.replyTo === undefined ? "new" : "reply", id: msg.id, account: msg.account,
-      to: msg.draft?.to ?? formatContacts(msg.to ?? []), subject: msg.subject, body: msg.body.join("\n\n"), replyTo: msg.draft?.replyTo,
+      to: msg.draft?.to ?? formatContacts(msg.to ?? []), subject: msg.subject, body: msg.body.join("\n\n"), replyTo: msg.draft?.replyTo, attachments: msg.attachments,
     };
   }
 
@@ -295,6 +299,8 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   return {
     messages, list, selected, mailbox, tab, panel, status, searching, conversation, composing, draft, contacts, problem, undoable,
     accounts, accountOf, isMine, nextId,
+    /** Shows why the draft can't go yet, beside Send (cleared by the next edit). */
+    showProblem: (text: string) => setProblem(text),
     mailboxName: (box: Mailbox) => mailboxName(box, accounts()),
     /** Shows a status line that isn't an undo step (sync progress, errors). */
     note: (text: string) => setStatus(text),
@@ -407,6 +413,40 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         setProblem("");
       });
     },
+    addAttachments(list: Attachment[]) {
+      batch(() => {
+        setDraft({ ...draft(), attachments: [...(draft().attachments ?? []), ...list] });
+        setProblem("");
+      });
+    },
+    removeAttachment(i: number) {
+      setDraft({ ...draft(), attachments: (draft().attachments ?? []).filter((_, j) => j !== i) });
+    },
+    /** Forwards the selected message: a new draft with its text quoted and its attachments. */
+    forward() {
+      const s = selected();
+      if (!s || composing()) return;
+      const who = (c: Contact) => (c.name && c.name !== c.email ? `${c.name} <${c.email}>` : c.email);
+      const quoted = [
+        "---------- Forwarded message ----------",
+        `From: ${who(s.from)}`,
+        `Date: ${longDate(s.date)}`,
+        `Subject: ${s.subject}`,
+        ...(s.to?.length ? [`To: ${s.to.map(who).join(", ")}`] : []),
+      ].join("\n");
+      batch(() => {
+        closePanel();
+        setDraft({
+          kind: "new", id: null, account: s.account, to: "",
+          subject: /^fwd?:/i.test(s.subject) ? s.subject : `Fwd: ${s.subject}`,
+          body: `\n\n${quoted}\n\n${s.body.join("\n\n")}`,
+          // Forwarded files still on the server are fetched when it's sent (`from` is where they are).
+          attachments: (s.attachments ?? []).map((a) => ({ ...a, from: s.id })),
+        });
+        setProblem("");
+        setComposing(true);
+      });
+    },
     /** A quick reply as a starting point: added to the body. */
     insertReply(text: string) {
       const body = draft().body.trimEnd();
@@ -425,7 +465,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       batch(() => {
         if (d.id !== null) change((ms) => ms.filter((m) => m.id !== d.id), "Draft discarded");
         else setStatus("Draft discarded");
-        setDraft({ ...d, id: null, to: "", subject: "", body: "" });
+        setDraft({ ...d, id: null, to: "", subject: "", body: "", attachments: [] });
         setComposing(false);
         setPanel(null);
       });
@@ -436,7 +476,9 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       const { ok, bad } = parseRecipients(d.to, contacts());
       if (bad.length) return setProblem(`“${bad[0]}” isn't an email address`), false;
       if (!ok.length) return setProblem("Add a recipient first"), false;
-      if (!d.body.trim() && !d.subject.trim()) return setProblem("Write something first"), false;
+      if (!d.body.trim() && !d.subject.trim() && !d.attachments?.length) return setProblem("Write something first"), false;
+      const bytes = (d.attachments ?? []).reduce((n, a) => n + a.size, 0);
+      if (bytes > MAX_SEND) return setProblem(`Attachments over 25 MB usually bounce (these are ${(bytes / 1e6).toFixed(0)} MB)`), false;
       const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
       const from = fromAccount(d.account);
       // A real account's message waits in the outbox (Undo Send), then goes over SMTP (src/mail/remote.ts).
@@ -449,6 +491,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         id: nextId(), account: d.account, folder: "sent", from, to: ok,
         subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: now(),
         unread: false, starred: false, important: true, labels: [], thread: original ? threadOf(original) : undefined,
+        attachments: d.attachments?.length ? d.attachments : undefined,
         ...(real ? { messageId: `${crypto.randomUUID()}@${from.email.split("@")[1] ?? "mantou.mail"}`, outbox: { replyTo: original?.id } } : {}),
       };
       batch(() => {
@@ -457,7 +500,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
           if (original) out = patch(original.id, { waitingSince: now() })(out);
           return [...out, sent];
         }, `${real ? "Sending" : "Sent"} to ${ok.map((c) => c.name).join(", ")}`);
-        setDraft({ ...d, id: null, to: "", subject: "", body: "" });
+        setDraft({ ...d, id: null, to: "", subject: "", body: "", attachments: [] });
         setComposing(false);
         setPanel(null);
       });

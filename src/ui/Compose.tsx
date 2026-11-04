@@ -1,8 +1,10 @@
 // Writing mail: the reply composer under the reader, and the new-message composer.
-import { For, Input, Show, Text, View, defineStyle, type Node } from "mantou-ui";
+import { For, Input, Show, Text, View, createSignal, defineStyle, type Node } from "mantou-ui";
+import type { Remote } from "../mail/remote";
+import { Icon } from "./icons";
 import { QUICK_REPLIES, type Mail } from "../state";
 import { C, hline, small, field } from "./theme";
-import { Kbd, SendButton, TextButton } from "./common";
+import { AttachmentChip, Kbd, SendButton, TextButton } from "./common";
 
 /** Why the draft can't be sent yet, beside the Send button. */
 export function Problem(props: { mail: Mail }) {
@@ -13,8 +15,61 @@ export function Problem(props: { mail: Mail }) {
   );
 }
 
+/** The draft's attachments, each with × to take it off. */
+function DraftAttachments(props: { mail: Mail }) {
+  return (
+    <Show when={props.mail.draft().attachments?.length}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <For each={props.mail.draft().attachments}>{(a, i) => <AttachmentChip attachment={a} onRemove={() => props.mail.removeAttachment(i())} />}</For>
+      </View>
+    </Show>
+  );
+}
+
+/**
+ * Attach: the system's file picker, or, where there's none, a field for a
+ * file's path. Workaround for dunkbing/mantou#21 (native dialogs).
+ */
+function AttachButton(props: { mail: Mail; remote?: Remote }) {
+  const [asking, setAsking] = createSignal(false);
+  const [path, setPath] = createSignal("");
+  const add = async (paths: string[]) => {
+    try {
+      props.mail.addAttachments(await props.remote!.attachFiles(paths));
+      setAsking(false);
+      setPath("");
+    } catch (e) {
+      props.mail.showProblem((e as Error).message);
+    }
+  };
+  const pick = async () => {
+    if (!props.remote) return props.mail.showProblem("Attaching files needs the app's data folder");
+    const chosen = await props.remote.pickFiles();
+    if (chosen === null) setAsking(true); // no picker on this system: type the path
+    else if (chosen.length) await add(chosen);
+  };
+  return (
+    <>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, flexShrink: 0, paddingLeft: 8, paddingRight: 10, borderRadius: 7 }} onPress={() => void pick()}>
+        <Icon name="paperclip" size={14} color={C.secondary} />
+        <Text style={{ fontSize: 13, fontWeight: 500, color: C.secondary }}>Attach</Text>
+      </View>
+      <Show when={asking()}>
+        <Input
+          autoFocus
+          value={path()}
+          onChange={setPath}
+          onSubmit={(v) => v.trim() && void add([v.trim()])}
+          placeholder="Path to a file, then Enter"
+          style={[field, { flexGrow: 1, flexBasis: 0, height: 30, paddingLeft: 8, fontSize: 13, borderRadius: 6, borderWidth: 1, borderColor: C.line }]}
+        />
+      </Show>
+    </>
+  );
+}
+
 /** A reply, written under the conversation. Quick replies are starting points. */
-export function ReplyComposer(props: { mail: Mail }) {
+export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
   let body: Node | undefined;
   return (
@@ -41,9 +96,11 @@ export function ReplyComposer(props: { mail: Mail }) {
         onSubmit={() => m.send()}
         style={[field, { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", lineHeight: 1.5 }]}
       />
+      <DraftAttachments mail={m} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <SendButton onPress={() => m.send()} />
         <TextButton label="Discard" onPress={m.discard} />
+        <AttachButton mail={m} remote={props.remote} />
         <Problem mail={m} />
       </View>
     </View>
@@ -51,7 +108,7 @@ export function ReplyComposer(props: { mail: Mail }) {
 }
 
 /** A new message (or a saved draft), over the app: From, To, Subject, the text. */
-export function Composer(props: { mail: Mail }) {
+export function Composer(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
   let subject: Node | undefined;
   let body: Node | undefined;
@@ -115,10 +172,16 @@ export function Composer(props: { mail: Mail }) {
           onSubmit={() => m.send()}
           style={[field, { height: 280, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20, lineHeight: 1.5 }]}
         />
+        <Show when={m.draft().attachments?.length}>
+          <View style={{ paddingLeft: 20, paddingRight: 20, paddingBottom: 12 }}>
+            <DraftAttachments mail={m} />
+          </View>
+        </Show>
         <View style={hline} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 56, paddingLeft: 16, paddingRight: 16 }}>
           <SendButton onPress={() => m.send()} />
           <TextButton label="Discard" onPress={m.discard} />
+          <AttachButton mail={m} remote={props.remote} />
           <Problem mail={m} />
         </View>
       </View>

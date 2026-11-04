@@ -9,6 +9,7 @@ The app uses `mantou-ui` 0.1.3 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 | Need | Kind | Issue | Workaround in the app |
 |---|---|---|---|
 | Icons: vector images (SVG) or app-supplied fonts | feature | [dunkbing/mantou#8](https://github.com/dunkbing/mantou/issues/8) (and Mantou's [#13](https://github.com/dunkbing/mantou/issues/13) images, [#14](https://github.com/dunkbing/mantou/issues/14) app fonts) | icons drawn from views on a 16-unit grid, and Inter's glyphs (`src/ui/icons.tsx`) |
+| Native file dialogs (attach, save as), opening a file with its app | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6621933514)) | the platform's own picker run from Bun (osascript, PowerShell, zenity, kdialog), else a path field; opening with `open`/`xdg-open`/`start` (`src/mail/files.ts`) |
 | A virtualised list | feature | Mantou's [#19](https://github.com/dunkbing/mantou/issues/19) (asked for in [#5](https://github.com/dunkbing/mantou/issues/5)) | rows rendered a page at a time, more as the scroll nears the end (`MessageList`) |
 
 ## Fixed

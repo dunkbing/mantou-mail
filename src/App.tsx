@@ -74,6 +74,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
       case "z": return m.undo();
       case "/": return searchInput?.focus();
       case "c": return m.compose();
+      case "f": return m.forward();
       case "Enter": return m.selected()?.folder === "drafts" && m.compose(m.selected()!);
       case "?": return setHelp(true);
       case "1": return usesTabs(m.mailbox()) && m.setTab("important");
@@ -98,13 +99,13 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
           <MessageList mail={m} remote={props.remote} />
           <View style={vline} />
-          <Reader mail={m} />
+          <Reader mail={m} remote={props.remote} />
         </View>
         <View style={hline} />
         <StatusBar mail={m} remote={props.remote} onHelp={() => setHelp(true)} />
       </View>
       <Show when={m.composing()}>
-        <Composer mail={m} />
+        <Composer mail={m} remote={props.remote} />
       </Show>
       <Show when={accounts() && props.remote}>
         <Accounts remote={props.remote!} onClose={() => setAccounts(false)} />

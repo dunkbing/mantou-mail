@@ -29,11 +29,12 @@ const SHAPES = {
   search: [ring(1, 1, 10.5), ...steps(9, 9, 6, 0.95, 0.95, 2.4)],
   plus: [line(7.25, 2, S, 12), line(2, 7.25, 12, S)],
   person: [ring(5, 1, 6), box(2, 9, 12, 6.5, 3.25)],
+  paperclip: [box(4.5, 1, 7, 14, 3.5), box(6.75, 4, 2.5, 7.5, 1.25)],
   keyboard: [box(1, 3.5, 14, 9.5, 2), dot(3.5, 6, 1.75), dot(6, 6, 1.75), dot(8.5, 6, 1.75), dot(11, 6, 1.75), line(4.5, 9.25, 7, S)],
 } satisfies Record<string, Part[]>;
 
 /** Symbols the bundled Inter has, drawn as text (they're the same on every platform). */
-const GLYPHS = { star: "★", starOutline: "☆", reply: "↩", close: "×", check: "✓" } as const;
+const GLYPHS = { star: "★", starOutline: "☆", reply: "↩", forward: "↪", close: "×", check: "✓" } as const;
 
 export type IconName = keyof typeof SHAPES | keyof typeof GLYPHS;
 
