@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Dropping files on the window while writing a message attaches them.
 - The dock icon shows how many messages are unread (macOS).
 - New mail shows a notification when the app isn't the window in front.
 - Updated Mantou to 0.2.0: attachments and sign-in pages open through Mantou, the same on every system (and drag and drop, text styles, themes and window control are there for later).

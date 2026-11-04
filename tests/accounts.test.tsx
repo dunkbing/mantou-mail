@@ -208,8 +208,14 @@ test("attachments in the app: open one, forward it with f, attach a file by its 
   h.key("Enter");
   await until(() => texts(h).includes("agenda.txt"), "the new attachment", () => h.step());
   expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md", "agenda.txt"]);
+  const dropped = join(dir, "photo.txt");
+  await Bun.write(dropped, "not really a photo");
+  h.dropFiles("drop", [dropped]); // a file dropped on the window
+  await until(() => texts(h).includes("photo.txt"), "the dropped file", () => h.step());
+  expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md", "agenda.txt", "photo.txt"]);
   const removes = [...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === glyph("close"));
-  h.press(removes.at(-1)!); // agenda.txt's
+  h.press(removes.at(-1)!); // photo.txt's
+  h.press([...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === glyph("close")).at(-1)!); // agenda.txt's
   expect(mail.draft().attachments!.map((a) => a.name)).toEqual(["Q4 OKRs (draft).md"]);
   h.press(inputs(h)[1]); // To
   h.type("priya@northwind.dev");

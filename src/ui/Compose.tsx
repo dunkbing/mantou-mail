@@ -1,5 +1,5 @@
 // Writing mail: the reply composer under the reader, and the new-message composer.
-import { For, Input, Show, Text, View, createMemo, createSignal, defineStyle, onKey, type Node } from "mantou-ui";
+import { For, Input, Show, Text, View, createMemo, createSignal, defineStyle, onCleanup, onFileDrop, onKey, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
 import { Icon } from "./icons";
 import { QUICK_REPLIES, acceptRecipient, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../state";
@@ -115,6 +115,12 @@ function AttachButton(props: { mail: Mail; remote?: Remote }) {
       props.mail.showProblem((e as Error).message);
     }
   };
+  // Files dropped on the window attach too (the composer is the only place that takes drops).
+  onCleanup(onFileDrop((kind, e) => {
+    if (kind !== 2 || !e.files.length) return;
+    if (!props.remote) return props.mail.showProblem("Attaching files needs the app's data folder");
+    void add(e.files);
+  }));
   const pick = async () => {
     if (!props.remote) return props.mail.showProblem("Attaching files needs the app's data folder");
     const chosen = await props.remote.pickFiles();
