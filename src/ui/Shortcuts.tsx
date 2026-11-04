@@ -4,8 +4,8 @@ import { SEND_KEYS, C, dialogShadow } from "./theme";
 import { Kbd } from "./common";
 
 export const SHORTCUTS: [string, string][][] = [
-  [["J / K", "Older / newer message"], ["1 / 2", "Important / Other"], ["/", "Search"], ["C", "Compose"], ["R", "Reply"], ["F", "Forward"], [SEND_KEYS, "Send"], ["Enter", "Open a draft"], ["Esc", "Close (keeps a draft), leave search"], ["?", "These shortcuts"]],
-  [["E", "Archive"], ["I", "Move to Inbox"], ["#", "Delete"], ["H", "Snooze"], ["L", "Labels"], ["S", "Star"], ["U", "Mark read / unread"], ["Z", "Undo"]],
+  [["J / K", "Older / newer message"], ["1 / 2", "Important / Other"], ["/", "Search"], ["C", "Compose"], ["R", "Reply"], ["A", "Reply all"], ["F", "Forward"], [SEND_KEYS, "Send"], ["Esc", "Close (keeps a draft), leave search"], ["?", "These shortcuts"]],
+  [["E", "Archive"], ["I", "Move to Inbox"], ["#", "Delete"], ["H", "Snooze"], ["L", "Labels"], ["S", "Star"], ["U", "Mark read / unread"], ["Z", "Undo"], ["Enter", "Open a draft"]],
 ];
 
 export function Shortcuts(props: { onClose: () => void }) {

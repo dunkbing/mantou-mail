@@ -4,7 +4,7 @@
 import type { MenuItem } from "mantou-ui";
 
 export type Command =
-  | "compose" | "accounts" | "reply" | "forward" | "archive" | "inbox" | "delete" | "snooze" | "label"
+  | "compose" | "accounts" | "reply" | "replyAll" | "forward" | "archive" | "inbox" | "delete" | "snooze" | "label"
   | "star" | "unread" | "undo" | "search" | "important" | "other" | "next" | "previous" | "shortcuts";
 
 const item = (id: Command, label: string, accelerator?: string): MenuItem => ({ id, label, ...(accelerator && { accelerator }) });
@@ -17,7 +17,7 @@ export const APP_MENU: MenuItem[] = [
   {
     label: "Message",
     items: [
-      item("reply", "Reply", "cmd+r"), item("forward", "Forward", "cmd+shift+f"), sep,
+      item("reply", "Reply", "cmd+r"), item("replyAll", "Reply All", "cmd+shift+r"), item("forward", "Forward", "cmd+shift+f"), sep,
       item("archive", "Archive"), item("inbox", "Move to Inbox"), item("delete", "Delete"), sep,
       item("snooze", "Snooze…"), item("label", "Label…"), item("star", "Star"), item("unread", "Mark as Read or Unread"), sep,
       item("undo", "Undo Last Action"),

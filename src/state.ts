@@ -1,7 +1,7 @@
 // Mantou Mail's state: Solid signals and the actions the UI and the keyboard
 // share. Nothing here knows about views.
 import { batch, createMemo, createSignal } from "mantou-ui";
-import { LABELS, SAMPLE_ACCOUNTS, longDate, now, sampleMessages, threadOf, type Account, type Attachment, type Contact, type Folder, type Message } from "./data";
+import { LABELS, SAMPLE_ACCOUNTS, dedupe, recipients, longDate, now, sampleMessages, threadOf, type Account, type Attachment, type Contact, type Folder, type Message } from "./data";
 
 /** What most servers take in one message (attachments are about a third bigger once encoded). */
 const MAX_SEND = 25_000_000;
@@ -94,6 +94,8 @@ export interface Draft {
   account: string;
   /** As typed: "Priya Shah <priya@northwind.dev>, jonas@acme.io". */
   to: string;
+  cc?: string;
+  bcc?: string;
   subject: string;
   body: string;
   replyTo?: number;
@@ -116,6 +118,32 @@ export function parseRecipients(text: string, known: Contact[] = []): { ok: Cont
   }
   return { ok, bad };
 }
+
+/**
+ * People to suggest for the address being typed (after the last comma): those
+ * whose name or address has a word starting with it, not already on the line.
+ */
+export function suggestRecipients(line: string, known: Contact[], max = 4): Contact[] {
+  const typed = line.slice(line.lastIndexOf(",") + 1).trim().toLowerCase();
+  if (!typed || /[<>]/.test(typed)) return [];
+  const have = new Set(parseRecipients(line.slice(0, line.lastIndexOf(",") + 1)).ok.map((c) => c.email.toLowerCase()));
+  const words = (c: Contact) => [...c.name.toLowerCase().split(/\s+/), c.name.toLowerCase(), ...c.email.toLowerCase().split(/[@._\-+]/), c.email.toLowerCase()];
+  return known.filter((c) => !have.has(c.email.toLowerCase()) && words(c).some((w) => w.startsWith(typed))).slice(0, max);
+}
+
+/** The line with the address being typed replaced by `c`, ready for the next one. */
+export function acceptRecipient(line: string, c: Contact): string {
+  const head = line.slice(0, line.lastIndexOf(",") + 1).trim();
+  return `${head ? `${head} ` : ""}${formatContacts([c])}, `;
+}
+
+/** Whether text you wrote says something is attached (a forward's quoted part left out). */
+export function mentionsAttachment(body: string): boolean {
+  const own = body.split(/^-{5,} Forwarded message -{5,}$/m)[0];
+  return /\b(attached|attachments?|attaching|enclosed)\b/i.test(own);
+}
+
+const names = (cs: Contact[]) => cs.map((c) => c.name).join(", ");
 
 export const formatContacts = (cs: Contact[]) => cs.map((c) => (c.name && c.name !== c.email ? `${c.name} <${c.email}>` : c.email)).join(", ");
 
@@ -161,6 +189,9 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   const [searching, setSearching] = createSignal(false);
   /** The new-message composer is open (replies are composed in the reply panel). */
   const [composing, setComposing] = createSignal(false);
+  const [replyingAll, setReplyingAll] = createSignal(false);
+  /** The text the forgotten-attachment warning was shown for (sending it again goes ahead). */
+  let warnedFor: string | null = null;
   /** Why the draft couldn't be sent (cleared by the next edit). */
   const [problem, setProblem] = createSignal("");
   const [draft, setDraft] = createSignal<Draft>({ kind: "new", id: null, account: accounts()[0]?.id ?? "", to: "", subject: "", body: "" });
@@ -198,7 +229,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   /** Everyone who has written to you, for names in the To line. */
   const contacts = createMemo(() => {
     const seen = new Map<string, Contact>();
-    for (const m of messages()) for (const c of [m.from, ...(m.to ?? [])]) if (!isMine(c) && c.email) seen.set(c.email.toLowerCase(), c);
+    for (const m of messages()) for (const c of [m.from, ...(m.to ?? []), ...(m.cc ?? []), ...(m.bcc ?? [])]) if (!isMine(c) && c.email) seen.set(c.email.toLowerCase(), c);
     return [...seen.values()];
   });
   const nextId = () => Math.max(0, ...messages().map((m) => m.id)) + 1;
@@ -223,8 +254,32 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   /** Changes a message without an undo step or an onChange (the outbox after sending). */
   const patchQuiet = (id: number, p: Partial<Message>) => setMessagesRaw(messages().map((m) => (m.id === id ? { ...m, ...p } : m)));
 
+  /** A draft's To, Cc and Bcc, parsed. */
+  const recipientsOf = (d: Draft) => {
+    const [to, cc, bcc] = [d.to, d.cc ?? "", d.bcc ?? ""].map((t) => parseRecipients(t, contacts()));
+    return { to: to.ok, cc: cc.ok, bcc: bcc.ok, bad: [...to.bad, ...cc.bad, ...bcc.bad] };
+  };
+  /** The draft's address lines as kept with a saved message. */
+  const linesOf = (d: Draft) => ({ to: d.to, ...(d.cc ? { cc: d.cc } : {}), ...(d.bcc ? { bcc: d.bcc } : {}), replyTo: d.replyTo });
+  /** Who a reply to `s` goes to: the sender (or, for your own message, its recipients), and with `all` everyone else on it in Cc. */
+  function replyRecipients(s: Message, all: boolean) {
+    const same = (a: Contact, b: Contact) => a.email.toLowerCase() === b.email.toLowerCase();
+    const to = isMine(s.from) ? (s.to?.length ? s.to : [s.from]) : [s.from];
+    const others = dedupe([...(s.to ?? []), ...(s.cc ?? [])]).filter((c) => !isMine(c) && !to.some((t) => same(t, c)));
+    return { to: formatContacts(to), cc: all ? formatContacts(others) : "", others };
+  }
+  /** Turns the reply being written into a Reply All, or back to the sender only; the text stays. */
+  function setReplyAll(all: boolean) {
+    const s = selected(), d = draft();
+    if (!s || panel() !== "reply" || d.replyTo !== s.id) return;
+    const r = replyRecipients(s, all);
+    batch(() => {
+      setDraft({ ...d, to: r.to, cc: r.cc });
+      setReplyingAll(all);
+    });
+  }
   /** Whether the draft has anything the user typed (a reply's To and Subject come filled in). */
-  const typed = (d: Draft) => !!d.body.trim() || !!d.attachments?.length || (d.kind === "new" && !!(d.to.trim() || d.subject.trim()));
+  const typed = (d: Draft) => !!d.body.trim() || !!d.attachments?.length || (d.kind === "new" && !!(d.to.trim() || d.cc?.trim() || d.bcc?.trim() || d.subject.trim()));
 
   /** Keeps the draft in Drafts (or drops its saved copy when it's empty). Not an undo step. */
   function saveDraft(): boolean {
@@ -235,11 +290,13 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     }
     const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
     const id = d.id ?? nextId();
+    const r = recipientsOf(d);
     const saved: Message = {
       id, account: d.account, folder: "drafts", from: fromAccount(d.account),
-      to: parseRecipients(d.to, contacts()).ok, subject: d.subject, body: paragraphs(d.body), date: now(),
+      to: r.to, ...(r.cc.length ? { cc: r.cc } : {}), ...(r.bcc.length ? { bcc: r.bcc } : {}),
+      subject: d.subject, body: paragraphs(d.body), date: now(),
       unread: false, starred: false, important: true, labels: [],
-      thread: original ? threadOf(original) : undefined, draft: { to: d.to, replyTo: d.replyTo }, attachments: d.attachments?.length ? d.attachments : undefined,
+      thread: original ? threadOf(original) : undefined, draft: linesOf(d), attachments: d.attachments?.length ? d.attachments : undefined,
     };
     setMessages(d.id === null ? [...messages(), saved] : messages().map((m) => (m.id === id ? saved : m)));
     setDraft({ ...d, id });
@@ -269,7 +326,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   function draftFrom(msg: Message): Draft {
     return {
       kind: msg.draft?.replyTo === undefined ? "new" : "reply", id: msg.id, account: msg.account,
-      to: msg.draft?.to ?? formatContacts(msg.to ?? []), subject: msg.subject, body: msg.body.join("\n\n"), replyTo: msg.draft?.replyTo, attachments: msg.attachments,
+      to: msg.draft?.to ?? formatContacts(msg.to ?? []), cc: msg.draft?.cc ?? formatContacts(msg.cc ?? []), bcc: msg.draft?.bcc ?? formatContacts(msg.bcc ?? []), subject: msg.subject, body: msg.body.join("\n\n"), replyTo: msg.draft?.replyTo, attachments: msg.attachments,
     };
   }
 
@@ -335,7 +392,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     backToDrafts(id: number) {
       const m = messages().find((x) => x.id === id);
       if (!m) return;
-      patchQuiet(id, { folder: "drafts", outbox: undefined, draft: { to: formatContacts(m.to ?? []), replyTo: m.outbox?.replyTo } });
+      patchQuiet(id, { folder: "drafts", outbox: undefined, draft: { to: formatContacts(m.to ?? []), cc: formatContacts(m.cc ?? []), bcc: formatContacts(m.bcc ?? []), replyTo: m.outbox?.replyTo } });
     },
     /**
      * Sets the accounts, and the messages to show for them (default: the ones
@@ -405,27 +462,40 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         setPanel(p);
       });
     },
-    /** Opens the reply composer for the selected message, with its saved draft if there is one. */
-    toggleReply() {
+    /**
+     * Opens the reply composer for the selected message, with its saved draft
+     * if there is one; `all` replies to everyone on it (the others in Cc).
+     * Pressed again, the same kind of reply closes it.
+     */
+    toggleReply(all = false) {
       const s = selected();
       if (!s) return;
-      if (panel() === "reply") return closePanel();
+      if (panel() === "reply") return replyingAll() === all ? closePanel() : setReplyAll(all);
       if (s.folder === "drafts") return compose(s);
       const saved = messages().find((m) => m.folder === "drafts" && m.draft?.replyTo === s.id);
+      const r = replyRecipients(s, all);
       batch(() => {
         closePanel();
-        setDraft(saved ? draftFrom(saved) : {
-          kind: "reply", id: null, account: s.account, replyTo: s.id,
-          to: formatContacts([isMine(s.from) ? (s.to?.[0] ?? s.from) : s.from]), subject: reSubject(s.subject), body: "",
-        });
+        const base: Draft = saved ? draftFrom(saved) : { kind: "reply", id: null, account: s.account, replyTo: s.id, to: r.to, cc: r.cc, subject: reSubject(s.subject), body: "" };
+        setDraft(all && !base.cc?.trim() ? { ...base, cc: r.cc } : base);
+        setReplyingAll(all || !!draft().cc?.trim()); // a saved reply with copies is a Reply All
         setProblem("");
         setPanel("reply");
       });
     },
+    /** Whether the reply composer is a Reply All. */
+    replyingAll,
+    /** The people a Reply All adds (none: there's no one else on the message). */
+    othersOnReply: () => {
+      const s = selected();
+      return s ? replyRecipients(s, true).others : [];
+    },
+    /** Turns the reply being written into a Reply All, or back to the sender only; the text stays. */
+    setReplyAll,
 
     // Composing: the draft is edited field by field, then sent or kept in Drafts.
     compose,
-    editDraft(p: Partial<Pick<Draft, "account" | "to" | "subject" | "body">>) {
+    editDraft(p: Partial<Pick<Draft, "account" | "to" | "cc" | "bcc" | "subject" | "body">>) {
       batch(() => {
         setDraft({ ...draft(), ...p });
         setProblem("");
@@ -451,6 +521,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         `Date: ${longDate(s.date)}`,
         `Subject: ${s.subject}`,
         ...(s.to?.length ? [`To: ${s.to.map(who).join(", ")}`] : []),
+        ...(s.cc?.length ? [`Cc: ${s.cc.map(who).join(", ")}`] : []),
       ].join("\n");
       batch(() => {
         closePanel();
@@ -483,7 +554,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       batch(() => {
         if (d.id !== null) change((ms) => ms.filter((m) => m.id !== d.id), "Draft discarded");
         else setStatus("Draft discarded");
-        setDraft({ ...d, id: null, to: "", subject: "", body: "", attachments: [] });
+        setDraft({ ...d, id: null, to: "", cc: "", bcc: "", subject: "", body: "", attachments: [] });
         setComposing(false);
         setPanel(null);
       });
@@ -492,10 +563,16 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     /** Sends the draft, now (after Undo Send) or, with `at`, then (Send Later); false, with the reason, if it can't go. */
     send(at?: Date): boolean {
       const d = draft();
-      const { ok, bad } = parseRecipients(d.to, contacts());
-      if (bad.length) return setProblem(`“${bad[0]}” isn't an email address`), false;
-      if (!ok.length) return setProblem("Add a recipient first"), false;
+      const r = recipientsOf(d);
+      if (r.bad.length) return setProblem(`“${r.bad[0]}” isn't an email address`), false;
+      if (!r.to.length && !r.cc.length && !r.bcc.length) return setProblem("Add a recipient first"), false;
+      const everyone = dedupe([...r.to, ...r.cc, ...r.bcc]);
       if (!d.body.trim() && !d.subject.trim() && !d.attachments?.length) return setProblem("Write something first"), false;
+      // Said "attached" with nothing attached: warn once; Send again sends it as it is.
+      if (!d.attachments?.length && mentionsAttachment(d.body) && warnedFor !== d.body) {
+        warnedFor = d.body;
+        return setProblem("It says “attached”, but nothing is. Attach it, or Send again to send it as it is"), false;
+      }
       const bytes = (d.attachments ?? []).reduce((n, a) => n + a.size, 0);
       if (bytes > MAX_SEND) return setProblem(`Attachments over 25 MB usually bounce (these are ${(bytes / 1e6).toFixed(0)} MB)`), false;
       const original = d.replyTo === undefined ? undefined : messages().find((m) => m.id === d.replyTo);
@@ -508,7 +585,8 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       const saved = draft().id;
       const later = at && at.getTime() > now().getTime() ? at : undefined;
       const sent: Message = {
-        id: nextId(), account: d.account, folder: later ? "scheduled" : "sent", from, to: ok,
+        id: nextId(), account: d.account, folder: later ? "scheduled" : "sent", from,
+        to: r.to, ...(r.cc.length ? { cc: r.cc } : {}), ...(r.bcc.length ? { bcc: r.bcc } : {}),
         subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: later ?? now(),
         unread: false, starred: false, important: true, labels: [], thread: original ? threadOf(original) : undefined,
         attachments: d.attachments?.length ? d.attachments : undefined,
@@ -521,8 +599,8 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
           let out = ms.filter((m) => m.id !== saved);
           if (original) out = patch(original.id, { waitingSince: now() })(out);
           return [...out, sent];
-        }, later ? `Scheduled for ${longDate(later)}` : `${real ? "Sending" : "Sent"} to ${ok.map((c) => c.name).join(", ")}`);
-        setDraft({ ...d, id: null, to: "", subject: "", body: "", attachments: [] });
+        }, later ? `Scheduled for ${longDate(later)}` : `${real ? "Sending" : "Sent"} to ${names(everyone)}`);
+        setDraft({ ...d, id: null, to: "", cc: "", bcc: "", subject: "", body: "", attachments: [] });
         setComposing(false);
         setPanel(null);
       });
@@ -533,14 +611,14 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       const s = selected();
       if (s?.folder !== "scheduled" || !s.outbox) return;
       const real = !accountOf(s.account)?.sample;
-      if (real) change(patch(s.id, { folder: "sent", date: now(), outbox: { replyTo: s.outbox.replyTo } }), `Sending to ${(s.to ?? []).map((c) => c.name).join(", ")}`);
-      else change(patch(s.id, { folder: "sent", date: now(), outbox: undefined }), `Sent to ${(s.to ?? []).map((c) => c.name).join(", ")}`);
+      if (real) change(patch(s.id, { folder: "sent", date: now(), outbox: { replyTo: s.outbox.replyTo } }), `Sending to ${names(recipients(s))}`);
+      else change(patch(s.id, { folder: "sent", date: now(), outbox: undefined }), `Sent to ${names(recipients(s))}`);
     },
     /** A scheduled message back to Drafts, unscheduled, to change it. */
     editScheduled() {
       const s = selected();
       if (s?.folder !== "scheduled") return;
-      const back = { ...s, folder: "drafts" as const, outbox: undefined, date: now(), draft: { to: formatContacts(s.to ?? []), replyTo: s.outbox?.replyTo } };
+      const back = { ...s, folder: "drafts" as const, outbox: undefined, date: now(), draft: { to: formatContacts(s.to ?? []), cc: formatContacts(s.cc ?? []), bcc: formatContacts(s.bcc ?? []), replyTo: s.outbox?.replyTo } };
       batch(() => {
         change((ms) => ms.map((m) => (m.id === s.id ? back : m)), "Unscheduled: it's in Drafts");
         compose(back);
@@ -555,7 +633,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         if (m.folder !== "scheduled" || !m.outbox?.at || !accountOf(m.account)?.sample) continue;
         if (Date.parse(m.outbox.at) > at.getTime()) continue;
         patchQuiet(m.id, { folder: "sent", outbox: undefined, date: new Date(m.outbox.at) });
-        setStatus(`Sent the scheduled message to ${(m.to ?? []).map((c) => c.name).join(", ")}`);
+        setStatus(`Sent the scheduled message to ${names(recipients(m))}`);
       }
     },
     undo() {

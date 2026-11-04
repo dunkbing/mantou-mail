@@ -9,8 +9,10 @@ The app uses `mantou-ui` 0.1.4 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 | Need | Kind | Issue | Workaround in the app |
 |---|---|---|---|
 | Telling a cancelled dialog from one that couldn't be shown (and Linux's zenity cancel answers `[]`) | bug | [dunkbing/mantou#28](https://github.com/dunkbing/mantou/issues/28) | a guess at whether the system has dialogs (zenity, or a portal and D-Bus); without them, a path field to attach, Save as goes to Downloads, removing an account doesn't ask (`hasDialogs` in `src/mail/files.ts`) |
+| Setting an `<Input>`'s value leaves the caret where it was; no way to place it | bug | [dunkbing/mantou#30](https://github.com/dunkbing/mantou/issues/30) | taking an address suggestion recreates the To/Cc/Bcc input, whose caret starts at the end (`AddressField` in `src/ui/Compose.tsx`) |
 | The app sets its window's size and minimum size | feature | [dunkbing/mantou#29](https://github.com/dunkbing/mantou/issues/29) | `bun run dev` passes `--width 1200 --height 760`; the built executable opens at 640 × 400 unless started with them |
 | A right click (to open a context menu), context menus on Linux and Windows, opening a file with its app | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | no context menus; opening with `open`/`xdg-open`/`start` (`src/mail/files.ts`) |
+| Rich text (to show HTML mail, and a formatting composer) | feature | Mantou's [#15](https://github.com/dunkbing/mantou/issues/15) | mail shown as text; the composer takes Markdown and sends it as HTML too (`src/mail/format.ts`) |
 | A virtualised list | feature | Mantou's [#19](https://github.com/dunkbing/mantou/issues/19) (asked for in [#5](https://github.com/dunkbing/mantou/issues/5)) | rows rendered a page at a time, more as the scroll nears the end (`MessageList`) |
 
 ## Fixed

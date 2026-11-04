@@ -333,6 +333,8 @@ export class AccountSync {
               folder,
               from: p.from,
               to: p.to,
+              ...(p.cc.length ? { cc: p.cc } : {}),
+              ...(p.bcc.length ? { bcc: p.bcc } : {}),
               subject: p.subject,
               body: p.body,
               date: p.date,

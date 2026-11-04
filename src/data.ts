@@ -86,10 +86,13 @@ export interface Message {
   /** You replied and are waiting for an answer, since this date. */
   waitingSince?: Date;
   snoozedUntil?: string;
-  /** Who it went to (messages you sent). */
+  /** Who it went to. */
   to?: Contact[];
-  /** A draft's fields as typed (the To line may not parse yet), and the message it replies to. */
-  draft?: { to: string; replyTo?: number };
+  cc?: Contact[];
+  /** Only on mail you sent. */
+  bcc?: Contact[];
+  /** A draft's fields as typed (the address lines may not parse yet), and the message it replies to. */
+  draft?: { to: string; cc?: string; bcc?: string; replyTo?: number };
   /** Messages with the same thread are one conversation (default: the message's own id). */
   thread?: number | string;
   /** Where it is on the server, for mail from a real account. */
@@ -104,6 +107,12 @@ export interface Message {
     at?: string;
   };
 }
+
+/** Contacts with each address once (the first one's name). */
+export const dedupe = (cs: Contact[]) => cs.filter((c, i) => cs.findIndex((d) => d.email.toLowerCase() === c.email.toLowerCase()) === i);
+
+/** Everyone a message went to. */
+export const recipients = (m: Message) => dedupe([...(m.to ?? []), ...(m.cc ?? []), ...(m.bcc ?? [])]);
 
 /** The conversation a message belongs to. */
 export const threadOf = (m: Message): number | string => m.thread ?? m.id;
@@ -140,6 +149,7 @@ export function sampleMessages(): Message[] {
     }),
     msg({
       account: "work", from: { name: "Daniel Okafor", email: "daniel@northwind.dev" }, date: ago(0, 2, 10), starred: true,
+      to: [{ name: "Product team", email: "product@northwind.dev" }], cc: [{ name: "Sam Rivera", email: "sam@northwind.dev" }, { name: "Priya Shah", email: "priya@northwind.dev" }],
       subject: "Q4 planning — draft OKRs attached",
       body: [
         "Team,",

@@ -32,7 +32,8 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   const commands: Record<Command, () => unknown> = {
     compose: () => m.compose(),
     accounts: () => props.remote && setAccounts(true),
-    reply: m.toggleReply,
+    reply: () => m.toggleReply(),
+    replyAll: () => m.toggleReply(true),
     forward: m.forward,
     archive: m.archive,
     inbox: m.moveToInbox,
@@ -99,6 +100,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
       case "s": return m.star();
       case "u": return m.toggleUnread();
       case "r": return m.toggleReply();
+      case "a": return m.toggleReply(true);
       case "h": return m.togglePanel("snooze");
       case "l": return m.togglePanel("labels");
       case "z": return m.undo();

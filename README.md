@@ -1,16 +1,16 @@
 # Mantou Mail
 
-A desktop mail client written in TypeScript and Solid-style JSX, running on [Mantou](https://github.com/dunkbing/mantou): the app runs in a Bun Worker, and Mantou's Rust core lays it out and draws it on the GPU. No webview.
+A desktop mail client written in TypeScript, running on [Mantou](https://github.com/dunkbing/mantou): native UI drawn on the GPU, no webview.
 
 ![Mantou Mail](docs/screenshot.png)
 
-IMAP accounts (Gmail, Outlook, iCloud, Fastmail, Yahoo, any IMAP server) synced to a local copy, conversations, Important/Other tabs, labels, snooze, search, replies, forwards and new messages with attachments and drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
+IMAP and SMTP accounts with a local copy that works offline, conversations, Important and Other, labels, snooze, search, reply and reply all, forwards, attachments, drafts, Send Later, Undo Send and undo. Everything works from the keyboard (`?` lists the keys).
 
-> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each, and older ones on request: "Load older messages" at the end of the list), and reading, starring, archiving, deleting and moving go back to the server, also after working offline and quitting. Mail is sent over SMTP after a 10-second Undo Send, or later (Send later: in an hour, tomorrow morning or afternoon, Monday morning; it waits in Scheduled, and needs the app running at that time, or it goes when the app next starts), threaded as a reply where it is one, and filed in Sent. Attachments open with the system's app (saved to Downloads first) or save where you choose; attaching and saving use the system's file dialogs (on Linux, the desktop portal or zenity; without either, the composer asks for a path and saving goes to Downloads). On macOS the menu bar has the app's commands. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
+Early: until you add an account, it shows sample mail.
 
 ## Run it
 
-Needs [Bun](https://bun.sh) 1.4.4. `mantou-ui` comes from npm with a prebuilt native core for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), so there's nothing to compile.
+Needs [Bun](https://bun.sh) 1.4.4.
 
 ```bash
 bun install
@@ -20,36 +20,17 @@ bun install
 bun run dev
 ```
 
-**Add an account** with "Add your account" in the sidebar: email, password (many providers need an app password for IMAP and SMTP; the dialog says where to make one), and the IMAP and SMTP servers, guessed from the address. The password goes to the system keychain (Keychain, Secret Service, Credential Manager); without one, it's kept until you quit. Mail is kept in the app's data folder (`~/.local/share/mantou-mail`, `~/Library/Application Support/Mantou Mail`, `%APPDATA%\Mantou Mail`; `MANTOU_MAIL_HOME` to use another).
-
-**To try it without a real account**, run an IMAP and SMTP server on this machine with the sample mail, and add `sam@northwind.dev` with password `testpass`, IMAP server `127.0.0.1` port `1143`, SMTP server `127.0.0.1` port `1025`, username `testuser` (mail you send to `sam@northwind.dev` arrives in its Inbox):
+Add an account with "Add your account" in the sidebar. To try it without one, start a local IMAP and SMTP server with the sample mail, then add `sam@northwind.dev`, password `testpass`, servers `127.0.0.1` (IMAP port 1143, SMTP port 1025), username `testuser`:
 
 ```bash
 bun run demo-server
 ```
 
-**To build one executable** (Bun, the app and its icon font in one file, with Mantou's core beside it, in `dist/`):
+To build one executable in `dist/`:
 
 ```bash
 bun run build
 ```
-
-It opens at Mantou's default window size, 640 × 400, until the app can choose its own ([dunkbing/mantou#29](https://github.com/dunkbing/mantou/issues/29)); start it with `--width 1200 --height 760` meanwhile.
-
-## Keys
-
-| Key | | Key | |
-|---|---|---|---|
-| `j` / `k` | older / newer message | `e` | archive |
-| `1` / `2` | Important / Other | `i` | move to Inbox (from Archive, Snoozed, Trash) |
-| `/` | search (Enter keeps the results, Esc goes back) | `#` | delete (in Trash: for good) |
-| `c` | compose (`Enter` in To and Subject moves on) | `r` | reply (Esc keeps a draft) |
-| `f` | forward (with its attachments) | | |
-| `Ctrl`/`⌘`+`Enter` | send | `Enter` | open a draft (in Drafts) |
-| `?` | keyboard shortcuts | `h` | snooze (then `1`–`4`) |
-| `Esc` | close a panel, leave search | `l` | labels (then `1`–`4` toggle) |
-| `z` | undo (sending too) | | |
-| `s` | star | `u` | mark read / unread |
 
 ## Test
 
@@ -57,8 +38,9 @@ It opens at Mantou's default window size, 640 × 400, until the app can choose i
 bun test
 ```
 
-`bun run perf` measures what the common interactions cost on the real core; the numbers are in [docs/performance.md](docs/performance.md).
+## More
 
-Icons are [Lucide](https://lucide.dev)'s (ISC licence, `assets/fonts/`).
-
-The tests run the app on a headless instance of Mantou's real core: layout, presses, keys, the wheel and captured pixels, with no window. Real accounts are tested against an IMAP server in the test process ([hoodiecrow](https://github.com/postalsys/hoodiecrow-imap)): the first sync, changes reaching the server, new mail over IDLE, and the saved copy.
+- [docs/upstream.md](docs/upstream.md): what the app needs from Mantou, and the workarounds meanwhile
+- [docs/performance.md](docs/performance.md): what the common interactions cost
+- [docs/agentic-design.md](docs/agentic-design.md): where it's going
+- Icons: [Lucide](https://lucide.dev) (ISC)

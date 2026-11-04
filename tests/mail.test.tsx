@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
-import { createMail, parseRecipients, sendLaterOptions, type Mail } from "../src/state";
+import { createMail, formatContacts, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../src/state";
 import { sampleMessages } from "../src/data";
 import { PAGE } from "../src/ui/MessageList";
 
@@ -101,7 +101,8 @@ test("reply: r opens the composer with the focus in it; a quick reply is a start
   const { h, mail } = app();
   h.key("r");
   expect(mail.replying()).toBe(true);
-  expect(texts(h)).toContain("REPLY TO PRIYA SHAH");
+  expect(texts(h)).toContain("REPLY");
+  expect(texts(h)).toContain("To Priya Shah");
   expect(h.focused()).not.toBe(null); // typing goes to the reply, not to triage
   h.press(text(h, "Thanks, got it!", -1));
   h.key("End");
@@ -467,4 +468,83 @@ test("the app menu: its items run the same commands as the keys", () => {
   h.key("Escape");
   h.chooseMenu("shortcuts");
   expect(texts(h).filter((t) => t === "Keyboard shortcuts").length).toBe(2); // the status bar's, and the dialog's
+});
+
+test("reply all: a puts everyone else on the message in Cc (not you); it can go back to the sender only", () => {
+  const { h, mail } = app();
+  h.press(text(h, "Q4 planning — draft OKRs attached"));
+  h.key("a");
+  expect(mail.replying()).toBe(true);
+  expect(mail.draft()).toMatchObject({ to: "Daniel Okafor <daniel@northwind.dev>", cc: "Product team <product@northwind.dev>, Priya Shah <priya@northwind.dev>" });
+  expect(texts(h)).toContain("REPLY ALL");
+  expect(texts(h)).toContain("To Daniel Okafor  ·  Cc Product team, Priya Shah");
+  h.type("Looks good to me.");
+  h.press(text(h, "Reply to sender"));
+  expect(mail.draft()).toMatchObject({ cc: "", body: "Looks good to me." }); // the text stays
+  h.press(text(h, "Reply all"));
+  h.press(text(h, "Send"));
+  const sent = mail.messages().at(-1)!;
+  expect(sent.to!.map((c) => c.email)).toEqual(["daniel@northwind.dev"]);
+  expect(sent.cc!.map((c) => c.email)).toEqual(["product@northwind.dev", "priya@northwind.dev"]);
+  expect(texts(h)).toContain("Sent to Daniel Okafor, Product team, Priya Shah");
+  // A message with no one else on it has no Reply all to offer.
+  h.press(text(h, "Lisbon flights are cheap again"));
+  h.key("r");
+  expect(texts(h)).not.toContain("Reply all");
+});
+
+test("addresses: people you've written with are suggested; Enter or a press takes one; Cc and Bcc", () => {
+  const { h, mail } = app();
+  h.key("c");
+  h.type("pri");
+  expect(texts(h)).toContain("priya@northwind.dev"); // the suggestion
+  h.key("Enter"); // takes it, and stays for the next one
+  expect(mail.draft().to).toBe("Priya Shah <priya@northwind.dev>, ");
+  h.type("ale");
+  h.press(text(h, "Alex Kim", -1)); // the suggestion (the list behind has one too)
+  h.type("m");
+  const [first, second] = suggestRecipients(mail.draft().to, mail.contacts());
+  expect(second).toBeDefined();
+  h.key("ArrowDown");
+  h.key("Enter"); // the second one
+  expect(mail.draft().to).toBe(`Priya Shah <priya@northwind.dev>, Alex Kim <alex.kim@hey.com>, ${formatContacts([second])}, `); // the caret stayed at the end each time
+  expect(first).not.toEqual(second);
+  h.press(text(h, "Cc Bcc"));
+  h.press(inputs(h)[2]); // Cc
+  h.type("mira@northwind.dev");
+  h.key("Enter"); // a whole address: on to Bcc, nothing taken
+  expect(mail.draft().cc).toBe("mira@northwind.dev");
+  h.type("daniel@northwind.dev");
+  h.key("Enter"); // on to Subject
+  h.type("Offsite");
+  expect(mail.draft()).toMatchObject({ bcc: "daniel@northwind.dev", subject: "Offsite" });
+  h.key("Enter");
+  h.type("Friday?");
+  h.press(text(h, "Send"));
+  const sent = mail.messages().at(-1)!;
+  expect(sent.to!.length).toBe(3);
+  expect(sent.cc).toEqual([{ name: "Mira Kowalski", email: "mira@northwind.dev" }]); // its name, from earlier mail
+  expect(sent.bcc).toEqual([{ name: "Daniel Okafor", email: "daniel@northwind.dev" }]);
+});
+
+test("it says attached but nothing is: Send warns once, and sends on the second press", () => {
+  const { h, mail } = app();
+  h.key("c");
+  h.type("alex.kim@hey.com");
+  h.key("Enter");
+  h.type("Flights");
+  h.key("Enter");
+  h.type("I've attached the booking.");
+  h.press(text(h, "Send"));
+  expect(mail.composing()).toBe(true);
+  expect(texts(h)).toContain("It says “attached”, but nothing is. Attach it, or Send again to send it as it is");
+  h.press(text(h, "Send"));
+  expect(mail.composing()).toBe(false);
+  expect(mail.messages().at(-1)).toMatchObject({ subject: "Flights", folder: "sent" });
+  // A forward that quotes "attached" from the original isn't warned about.
+  h.press(text(h, "Lisbon flights are cheap again"));
+  h.key("f");
+  mail.editDraft({ to: "alex.kim@hey.com", body: `FYI\n\n---------- Forwarded message ----------\nThe tickets are attached.` });
+  h.press(text(h, "Send"));
+  expect(mail.composing()).toBe(false);
 });

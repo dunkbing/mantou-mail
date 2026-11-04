@@ -5,7 +5,7 @@
 import { createSignal } from "mantou-ui";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { SAMPLE_ACCOUNTS, longDate, now, sampleMessages, type Attachment, type Folder, type Message } from "../data";
+import { SAMPLE_ACCOUNTS, longDate, now, recipients, sampleMessages, type Attachment, type Folder, type Message } from "../data";
 import { Blobs } from "./blobs";
 import type { MessageOptions } from "mantou-ui";
 import { confirm, downloadsDir, freeName, hasDialogs, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
@@ -123,7 +123,7 @@ export class Remote {
     const late = m.outbox.at && now().getTime() - Date.parse(m.outbox.at) > 60_000 ? m.outbox.at : undefined;
     const cfg = this.accounts().find((a) => a.id === m.account);
     const password = cfg && (await this.secrets.get(cfg.id));
-    const names = (m.to ?? []).map((c) => c.name).join(", ");
+    const names = recipients(m).map((c) => c.name).join(", ");
     const fail = (why: string) => {
       mail.backToDrafts(id);
       this.store.put(mail.messages().filter((x) => x.id === id));
@@ -133,9 +133,13 @@ export class Remote {
     const smtp = cfg.smtp ?? { ...guessSmtp(cfg.email), user: cfg.imap.user };
     const original = m.outbox.replyTo === undefined ? undefined : mail.messages().find((x) => x.id === m.outbox!.replyTo);
     let raw: Buffer;
+    let sentCopy: Buffer;
     try {
       const files = await Promise.all((m.attachments ?? []).map(async (a) => ({ name: a.name, type: a.type, content: await this.bytesOf(a) })));
-      raw = await compose({ ...m, date: now() }, original, files);
+      const out = { ...m, date: now() };
+      raw = await compose(out, original, files);
+      // The copy filed in Sent keeps the Bcc line, so you can see who got it.
+      sentCopy = m.bcc?.length ? await compose(out, original, files, { keepBcc: true }) : raw;
       await sendSmtp(smtp, password, m, raw);
     } catch (e) {
       return fail((e as Error).message);
@@ -143,7 +147,7 @@ export class Remote {
     mail.patchQuiet(id, { outbox: undefined, folder: "sent", date: now() });
     this.store.put(mail.messages().filter((x) => x.id === id));
     mail.note(late ? `Sent to ${names}: it was scheduled for ${longDate(new Date(late))}, while the app wasn't running` : `Sent to ${names}`);
-    await this.syncs.get(cfg.id)?.fileSent(raw, !savesSent(smtp.host)).catch(() => {});
+    await this.syncs.get(cfg.id)?.fileSent(sentCopy, !savesSent(smtp.host)).catch(() => {});
   }
 
   // ------------------------------------------------------------ attachments

@@ -3,8 +3,9 @@
 // provider doesn't do that itself.
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
-import type { Contact, Message } from "../data";
+import { recipients, type Contact, type Message } from "../data";
 import { isLocalHost, type SmtpSettings } from "./providers";
+import { hasFormatting, replyHtml, replyText } from "./format";
 
 const address = (c: Contact) => ({ name: c.name && c.name !== c.email ? c.name : "", address: c.email });
 
@@ -20,23 +21,32 @@ export interface OutgoingFile {
   content: Uint8Array;
 }
 
-/** The message as sent: RFC 822 bytes, with In-Reply-To and References when it answers another. */
-export async function compose(m: Message, original?: Message, files: OutgoingFile[] = []): Promise<Buffer> {
+/**
+ * The message as sent: RFC 822 bytes, with In-Reply-To and References when it
+ * answers another, whose text it quotes. Written formatting goes in an HTML
+ * version too (src/mail/format.ts). Bcc is left out, except in the copy for
+ * Sent (`keepBcc`).
+ */
+export async function compose(m: Message, original?: Message, files: OutgoingFile[] = [], options: { keepBcc?: boolean } = {}): Promise<Buffer> {
   const refs = original?.messageId ? `<${original.messageId}>` : undefined;
-  return new MailComposer({
+  const body = m.body.join("\n\n");
+  const mail = new MailComposer({
     from: address(m.from),
     to: (m.to ?? []).map(address),
+    cc: (m.cc ?? []).map(address),
+    bcc: (m.bcc ?? []).map(address),
     subject: m.subject,
-    text: m.body.join("\n\n"),
+    text: replyText(body, original),
+    ...(original || hasFormatting(body) ? { html: replyHtml(body, original) } : {}),
     date: m.date,
     messageId: m.messageId ? `<${m.messageId}>` : undefined,
     inReplyTo: refs,
     references: refs,
     headers: { "X-Mailer": "Mantou Mail" },
     attachments: files.map((f) => ({ filename: f.name, contentType: f.type, content: Buffer.from(f.content) })),
-  })
-    .compile()
-    .build();
+  }).compile();
+  mail.keepBcc = !!options.keepBcc;
+  return mail.build();
 }
 
 function transport(s: SmtpSettings, password: string) {
@@ -83,7 +93,7 @@ export async function checkSmtp(s: SmtpSettings, password: string): Promise<void
 export async function send(s: SmtpSettings, password: string, m: Message, raw: Buffer): Promise<void> {
   const t = transport(s, password);
   try {
-    await t.sendMail({ envelope: { from: m.from.email, to: (m.to ?? []).map((c) => c.email) }, raw });
+    await t.sendMail({ envelope: { from: m.from.email, to: recipients(m).map((c) => c.email) }, raw });
   } catch (e) {
     throw new Error(explainSmtp(e, s));
   } finally {

@@ -6,6 +6,8 @@ import type { Attachment, Contact } from "../data";
 export interface Parsed {
   from: Contact;
   to: Contact[];
+  cc: Contact[];
+  bcc: Contact[];
   subject: string;
   body: string[];
   date: Date;
@@ -83,7 +85,9 @@ export async function parseMessage(source: Buffer | string, opts: { serverThread
   const refs = Array.isArray(p.references) ? p.references : p.references ? p.references.split(/\s+/) : [];
   return {
     from,
-    to: [...addresses(p.to), ...addresses(p.cc)],
+    to: addresses(p.to),
+    cc: addresses(p.cc),
+    bcc: addresses(p.bcc),
     subject,
     body: paragraphsOf(p.text ?? ""),
     date: p.date ?? opts.internalDate ?? new Date(),

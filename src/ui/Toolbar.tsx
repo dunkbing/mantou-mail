@@ -57,7 +57,7 @@ export function Toolbar(props: { mail: Mail }) {
           <ToolButton label="Move to Inbox" icon="inbox" hint="I" onPress={m.moveToInbox} />
         </Show>
         <ToolButton label="Label" icon="tag" hint="L" onPress={() => m.togglePanel("labels")} disabled={none()} active={m.panel() === "labels"} />
-        <ToolButton label="Reply" icon="reply" hint="R" onPress={m.toggleReply} disabled={none()} active={m.panel() === "reply"} />
+        <ToolButton label="Reply" icon="reply" hint="R" onPress={() => m.toggleReply()} disabled={none()} active={m.panel() === "reply"} />
         <ToolButton label="Forward" icon="forward" hint="F" onPress={m.forward} disabled={none()} />
         <ToolButton label={m.selected()?.folder === "trash" ? "Delete forever" : "Delete"} icon="trash" hint="#" onPress={m.remove} disabled={none()} />
       </View>

@@ -39,7 +39,7 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
         <Avatar name={msg().from.name} size={40} />
         <View style={{ flexGrow: 1, flexShrink: 1, gap: 2 }}>
           <Text style={{ fontSize: 14, fontWeight: 600, color: C.text, maxLines: 1 }}>{displayName(props.mail, msg())}</Text>
-          <Text style={[small, { maxLines: 1 }]}>{`${msg().from.email} → ${props.mail.isMine(msg().from) ? (msg().to?.map((c) => c.email).join(", ") || "no recipients yet") : to()}`}</Text>
+          <Text style={[small, { maxLines: 1 }]}>{`${msg().from.email} → ${(msg().to?.length ? msg().to!.map((c) => c.email).join(", ") : props.mail.isMine(msg().from) ? "no recipients yet" : to())}${msg().cc?.length ? `, cc ${msg().cc!.map((c) => c.email).join(", ")}` : ""}${msg().bcc?.length ? `, bcc ${msg().bcc!.map((c) => c.email).join(", ")}` : ""}`}</Text>
         </View>
         <Text style={small}>{longDate(msg().date)}</Text>
       </View>
@@ -89,7 +89,7 @@ export function Panel(props: { mail: Mail; remote?: Remote }) {
       <View style={{ paddingTop: 14, paddingBottom: 16, paddingLeft: 36, paddingRight: 36, gap: 10, backgroundColor: "#fafafa" }}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={[caption, { flexGrow: 1, flexShrink: 1, maxLines: 1 }]}>
-            {m.panel() === "reply" ? `REPLY TO ${m.draft().to.replace(/\s*<.*$/, "").toUpperCase()}` : m.panel() === "snooze" ? "SNOOZE UNTIL" : "LABELS"}
+            {m.panel() === "reply" ? (m.replyingAll() ? "REPLY ALL" : "REPLY") : m.panel() === "snooze" ? "SNOOZE UNTIL" : "LABELS"}
           </Text>
           <Text style={[caption, { fontWeight: 500 }]}>{m.panel() === "reply" ? "Esc keeps a draft" : "Esc to close"}</Text>
         </View>

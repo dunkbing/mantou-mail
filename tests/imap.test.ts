@@ -241,6 +241,35 @@ test("a reply is sent with In-Reply-To and References, so it threads everywhere"
   expect(server.smtp.received[0].to).toEqual(["priya@example.com"]);
 });
 
+test("reply all over SMTP: Cc in the headers, Bcc only in the envelope (and in Sent's copy); the original quoted, with an HTML part", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  await addAccount(env);
+  await server.deliver("INBOX", { from: "Priya Shah <priya@example.com>", subject: "Launch plan", body: "Thoughts on Tuesday?\n\nPriya", id: "launch", headers: "Cc: Mira Kowalski <mira@example.com>, Test User <testuser@example.com>" });
+  await until(() => mail.messages().some((m) => m.subject === "Launch plan"), "the message");
+  const launch = mail.messages().find((m) => m.subject === "Launch plan")!;
+  expect(launch.cc).toEqual([{ name: "Mira Kowalski", email: "mira@example.com" }, { name: "Test User", email: "testuser@example.com" }]);
+  mail.select(launch.id);
+  mail.toggleReply(true);
+  expect(mail.draft()).toMatchObject({ to: "Priya Shah <priya@example.com>", cc: "Mira Kowalski <mira@example.com>" }); // not you
+  mail.editDraft({ bcc: "daniel@example.com", body: "Tuesday is **great**. Agenda:\n\n- launch\n- metrics" });
+  mail.send();
+  await until(() => server.smtp.received.length === 1, "the reply");
+  const got = server.smtp.received[0];
+  expect(got.to.sort()).toEqual(["daniel@example.com", "mira@example.com", "priya@example.com"]);
+  expect(got.raw).toContain("Cc: Mira Kowalski <mira@example.com>");
+  expect(got.raw).not.toMatch(/^Bcc:/m);
+  expect(got.raw).toContain("> Thoughts on Tuesday?"); // the text part quotes the original
+  expect(got.raw).toMatch(/On \w{3}, \d+ \w{3} 2026 at \d\d:\d\d, Priya Shah <priya@example.com> wrote:/);
+  expect(got.raw).toContain("Content-Type: text/html");
+  expect(got.raw.replace(/=\r?\n/g, "")).toContain("<strong>great</strong>");
+  await remote.outboxEmpty();
+  await until(() => mail.messages().some((m) => m.subject === "Re: Launch plan" && m.remote?.path === "Sent"), "the copy in Sent");
+  const sent = mail.messages().find((m) => m.subject === "Re: Launch plan")!;
+  expect(sent.bcc).toEqual([{ name: "Daniel", email: "daniel@example.com" }]); // Sent's copy keeps the Bcc line (named from his earlier mail)
+  expect(sent.body).toEqual(["Tuesday is **great**. Agenda:", "- launch\n- metrics"]); // the quote is folded away when read
+});
+
 test("Undo Send within the window sends nothing, and puts the text back in Drafts", async () => {
   const env = await setup();
   const { mail, server, remote } = env;
