@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- The dock icon shows how many messages are unread (macOS).
+- New mail shows a notification when the app isn't the window in front.
 - Updated Mantou to 0.2.0: attachments and sign-in pages open through Mantou, the same on every system (and drag and drop, text styles, themes and window control are there for later).
 - A right click on a message opens a menu of what to do with it (reply, archive, snooze, label, star and so on).
 - Taking an address suggestion puts the caret after it, without remaking the field.

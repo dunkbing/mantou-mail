@@ -1,6 +1,6 @@
 // Mantou Mail: a sidebar of mailboxes and labels, a message list, a reader
 // that shows the whole conversation, and keyboard triage (? lists the keys).
-import { Show, View, createEffect, createSignal, onCleanup, onKey, setMenu, useUi, type Node } from "mantou-ui";
+import { Show, View, createEffect, createSignal, onCleanup, onKey, setBadge, setMenu, useUi, type Node } from "mantou-ui";
 import { LABELS } from "./data";
 import { createMail, usesTabs, type Mail } from "./state";
 import { hline, vline } from "./ui/theme";
@@ -27,6 +27,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   createEffect(() => {
     const unread = m.unread({ kind: "all" });
     ui.title(unread ? `Mantou Mail — ${unread} unread` : "Mantou Mail");
+    if (props.remote) void setBadge(unread); // the dock's count (macOS), for real accounts
   });
   // The app menu's commands, the same as their keys.
   const commands: Record<Command, () => unknown> = {

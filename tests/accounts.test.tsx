@@ -125,6 +125,15 @@ test("an account's signature is typed in Accounts, and kept", async () => {
   expect(remote.accounts()[0].signature).toBe("Best, Sam");
 });
 
+test("the dock badge shows the unread count of real accounts", async () => {
+  const { h, mail, remote, server } = await app();
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });
+  await remote.syncOf(a.id)!.firstSync;
+  await until(() => (h.lastService() as { kind?: string }).kind === "setBadge", "the badge", () => h.step());
+  expect(h.lastService()).toMatchObject({ kind: "setBadge", text: String(mail.unread({ kind: "all" })) });
+  expect(mail.unread({ kind: "all" })).toBeGreaterThan(0);
+});
+
 test("removing the last account asks first, then brings the sample mail back", async () => {
   const { h, mail, remote, server } = await app();
   const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });

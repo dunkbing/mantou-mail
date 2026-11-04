@@ -2,7 +2,7 @@
 // bridge to the app's state. The app's changes arrive as "messages before and
 // after" (Mail's onChange) and become server changes here; the servers'
 // messages arrive through Mail.receive.
-import { createSignal } from "mantou-ui";
+import { createSignal, notify, win } from "mantou-ui";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { SAMPLE_ACCOUNTS, longDate, now, recipients, sampleMessages, type Attachment, type Folder, type Message } from "../data";
@@ -59,6 +59,9 @@ export class Remote {
       /** Where opened attachments are saved (default: Downloads), and what opens them (default: the system). */
       downloads?: string;
       open?: (path: string) => void;
+      /** Shows a notification for new mail (default: the system's), and whether the app's window has the focus (default: asks the window; a focused app doesn't notify). */
+      notify?: (n: { title: string; body: string }) => void;
+      focused?: () => Promise<boolean>;
       /** Whether the system's dialogs can be shown (default: a guess, see hasDialogs). */
       dialogs?: boolean;
       /** The providers accounts can sign in with (default: the app's, see oauth.ts), and what opens their sign-in page (default: the system's browser). */
@@ -169,6 +172,28 @@ export class Remote {
 
   /** Per draft (by Message-ID): its server copy's latest change, so that they happen in the order they were made. */
   private mirrors = new Map<string, Promise<void>>();
+
+  /** The newest inbox message's date, per account, when its mail was last handed to the app: what's newer than it is new mail. */
+  private newest = new Map<string, number>();
+
+  /** Tells of mail that came in since the last time, unless the window has the focus. The first look at an account only notes where it stands. */
+  private announceNew(account: string, list: Message[]) {
+    const inbox = list.filter((m) => m.folder === "inbox");
+    const was = this.newest.get(account);
+    this.newest.set(account, Math.max(was ?? 0, ...inbox.map((m) => m.date.getTime())));
+    const fresh = was === undefined ? [] : inbox.filter((m) => m.unread && m.date.getTime() > was);
+    if (!fresh.length) return;
+    void (async () => {
+      try {
+        if (await (this.options.focused ?? (async () => !!(await win.state())?.focused))()) return;
+        const one = fresh.length === 1;
+        (this.options.notify ?? ((n) => void notify(n)))({
+          title: one ? fresh[0].from.name : `${fresh.length} new messages`,
+          body: one ? fresh[0].subject || "(no subject)" : fresh.slice(0, 3).map((m) => m.from.name).join(", "),
+        });
+      } catch {} // no window to ask (tests, or before it opens)
+    })();
+  }
 
   /** Puts a draft's current text in the server's Drafts in place of its earlier copy, or (no `draft`) removes the copy. Best effort: a later save tries again. */
   private mirrorDraft(account: string, messageId: string, draft?: Message) {
@@ -357,6 +382,7 @@ export class Remote {
         const arrived = new Set(list.map((m) => m.messageId).filter(Boolean));
         const copies = this.mail?.messages().filter((m) => m.account === account && !m.remote && !m.outbox && m.messageId && arrived.has(m.messageId)) ?? [];
         if (copies.length) this.store.remove(copies.map((m) => m.id));
+        this.announceNew(account, list);
         this.mail?.receive(account, list);
       },
       onStatus: (account, s) => this.setStatus(account, s),

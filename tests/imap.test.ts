@@ -23,14 +23,14 @@ const CODE = { from: "Acme <no-reply@acme.io>", subject: "Your sign-in code", bo
 const REPLY = { from: "Test User <testuser@example.com>", subject: "Re: Onboarding review", body: "Will do.\n\nOn Mon, 2 Nov 2026 at 16:00, Priya Shah <priya@example.com> wrote:\n> Could you look at the onboarding flow before Thursday?", inReplyTo: "onboarding", flags: ["\\Seen"], date: "Mon, 02 Nov 2026 17:00:00 +0000" };
 const OLD = { from: "Daniel <daniel@example.com>", subject: "Q3 retro notes", body: "In the wiki.", flags: ["\\Seen", "\\Flagged"], date: "Fri, 16 Oct 2026 10:00:00 +0000" };
 
-async function setup(opts: { dir?: string } = {}) {
+async function setup(opts: { dir?: string; remote?: ConstructorParameters<typeof Remote>[2] } = {}) {
   const server = await imapServer({ inbox: [PRIYA, NEWS, CODE], sent: [REPLY], archive: [OLD] });
   cleanup.push(() => server.close());
   const dir = opts.dir ?? mkdtempSync(join(tmpdir(), "mantou-mail-"));
   if (!opts.dir) cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const store = new Store(dir);
   cleanup.push(() => store.close());
-  const remote = new Remote(store, memorySecrets(), { expungeDelay: 30, undoSend: 30 });
+  const remote = new Remote(store, memorySecrets(), { expungeDelay: 30, undoSend: 30, ...opts.remote });
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail: Mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -281,6 +281,21 @@ test("an account's signature goes under what's sent from it, not into the draft"
   await until(() => server.smtp.received.length === 1, "the message to arrive");
   expect(server.smtp.received[0].raw).toMatch(/See you Tuesday\.\r?\n\r?\n-- \r?\nBest,\r?\nSam/);
   expect(mail.messages().find((m) => m.subject === "Hello")!.body).toEqual(["See you Tuesday."]);
+});
+
+test("new mail is announced, once, when the window isn't focused; mail already there isn't", async () => {
+  const told: { title: string; body: string }[] = [];
+  let focused = true;
+  const env = await setup({ remote: { notify: (n) => void told.push(n), focused: async () => focused } });
+  await addAccount(env);
+  expect(told).toEqual([]); // what the first sync finds isn't new
+  await env.server.deliver("INBOX", { from: "Alex Kim <alex@example.com>", subject: "Seen while focused", body: "Hi", date: "Mon, 09 Nov 2026 09:00:00 +0000" });
+  await until(() => env.mail.messages().some((m) => m.subject === "Seen while focused"), "the mail");
+  expect(told).toEqual([]); // the window has the focus
+  focused = false;
+  await env.server.deliver("INBOX", { from: "Priya Shah <priya@example.com>", subject: "Lunch?", body: "Hi", date: "Mon, 09 Nov 2026 10:00:00 +0000" });
+  await until(() => told.length === 1, "the notification");
+  expect(told[0]).toEqual({ title: "Priya Shah", body: "Lunch?" });
 });
 
 test("Undo Send within the window sends nothing, and puts the text back in Drafts", async () => {
