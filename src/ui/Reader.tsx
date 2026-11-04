@@ -39,12 +39,12 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
         <Avatar name={msg().from.name} size={40} />
         <View style={{ flexGrow: 1, flexShrink: 1, gap: 2 }}>
           <Text style={{ fontSize: 14, fontWeight: 600, color: C.text, maxLines: 1 }}>{displayName(props.mail, msg())}</Text>
-          <Text style={[small, { maxLines: 1 }]}>{`${msg().from.email} → ${(msg().to?.length ? msg().to!.map((c) => c.email).join(", ") : props.mail.isMine(msg().from) ? "no recipients yet" : to())}${msg().cc?.length ? `, cc ${msg().cc!.map((c) => c.email).join(", ")}` : ""}${msg().bcc?.length ? `, bcc ${msg().bcc!.map((c) => c.email).join(", ")}` : ""}`}</Text>
+          <Text style={[small(), { maxLines: 1 }]}>{`${msg().from.email} → ${(msg().to?.length ? msg().to!.map((c) => c.email).join(", ") : props.mail.isMine(msg().from) ? "no recipients yet" : to())}${msg().cc?.length ? `, cc ${msg().cc!.map((c) => c.email).join(", ")}` : ""}${msg().bcc?.length ? `, bcc ${msg().bcc!.map((c) => c.email).join(", ")}` : ""}`}</Text>
         </View>
-        <Text style={small}>{longDate(msg().date)}</Text>
+        <Text style={small()}>{longDate(msg().date)}</Text>
       </View>
       <View style={{ gap: 14 }}>
-        <For each={msg().body}>{(p) => <Text style={{ fontSize: 14, lineHeight: 1.6, color: "#1f2937" }}>{p}</Text>}</For>
+        <For each={msg().body}>{(p) => <Text style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>{p}</Text>}</For>
       </View>
       <Show when={msg().attachments?.length}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -63,7 +63,7 @@ export function FoldedMessage(props: { mail: Mail; message: Message; onPress: ()
       <Avatar name={msg().from.name} size={32} />
       <Text style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, color: C.text, maxLines: 1 }}>{displayName(props.mail, msg())}</Text>
       <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 13, color: C.secondary, maxLines: 1 }}>{msg().body.join(" ").replace(/\s+/g, " ")}</Text>
-      <Text style={[small, { flexShrink: 0 }]}>{shortDate(msg().date)}</Text>
+      <Text style={[small(), { flexShrink: 0 }]}>{shortDate(msg().date)}</Text>
     </View>
   );
 }
@@ -85,13 +85,13 @@ export function Panel(props: { mail: Mail; remote?: Remote }) {
   );
   return (
     <>
-      <View style={hline} />
-      <View style={{ paddingTop: 14, paddingBottom: 16, paddingLeft: 36, paddingRight: 36, gap: 10, backgroundColor: "#fafafa" }}>
+      <View style={hline()} />
+      <View style={{ paddingTop: 14, paddingBottom: 16, paddingLeft: 36, paddingRight: 36, gap: 10, backgroundColor: C.subtle }}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={[caption, { flexGrow: 1, flexShrink: 1, maxLines: 1 }]}>
+          <Text style={[caption(), { flexGrow: 1, flexShrink: 1, maxLines: 1 }]}>
             {m.panel() === "reply" ? (m.replyingAll() ? "REPLY ALL" : "REPLY") : m.panel() === "snooze" ? "SNOOZE UNTIL" : "LABELS"}
           </Text>
-          <Text style={[caption, { fontWeight: 500 }]}>{m.panel() === "reply" ? "Esc keeps a draft" : "Esc to close"}</Text>
+          <Text style={[caption(), { fontWeight: 500 }]}>{m.panel() === "reply" ? "Esc keeps a draft" : "Esc to close"}</Text>
         </View>
         <Show when={m.panel() === "reply"}>
           <ReplyComposer mail={m} remote={props.remote} />
@@ -125,8 +125,8 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
     if (scroll && !scroll.released) scroll.scrollTo({ y: 0 }); // the <Show> releases it while nothing is selected
   }));
   return (
-    <View style={{ flexGrow: 1, flexShrink: 1, backgroundColor: "#ffffff" }}>
-      <Show when={m.selected()} fallback={<Text style={[small, { padding: 48, textAlign: "center" }]}>No message selected</Text>}>
+    <View style={{ flexGrow: 1, flexShrink: 1, backgroundColor: C.surface }}>
+      <Show when={m.selected()} fallback={<Text style={[small(), { padding: 48, textAlign: "center" }]}>No message selected</Text>}>
         <Scroll ref={(n) => (scroll = n)} style={{ flexGrow: 1, minHeight: 0 }}>
           <View style={{ paddingTop: 28, paddingLeft: 36, paddingRight: 36, paddingBottom: 28, gap: 18 }}>
             <Text style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject || "(no subject)"}</Text>
@@ -137,14 +137,14 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
                 <View style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 6, justifyContent: "center", backgroundColor: C.accent }} onPress={m.sendNow}>
                   <Text style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Send now</Text>
                 </View>
-                <View style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 6, justifyContent: "center", borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={m.editScheduled}>
+                <View style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 6, justifyContent: "center", borderWidth: 1, borderColor: C.line, backgroundColor: C.surface }} onPress={m.editScheduled}>
                   <Text style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Edit</Text>
                 </View>
               </View>
             </Show>
             <Show when={m.selected()!.folder === "drafts"}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Chip text="Draft" color="#b91c1c" background="#fef2f2" />
+                <Chip text="Draft" color={C.danger} background={C.dangerSoft} />
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingLeft: 10, paddingRight: 8, borderRadius: 6, borderWidth: 1, borderColor: C.line }} onPress={() => m.compose(m.selected()!)}>
                   <Text style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Edit draft</Text>
                   <Kbd text="Enter" />
@@ -157,7 +157,7 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
                   <Chip text={`${m.conversation().length} messages`} color={C.secondary} background={C.faint} />
                 </Show>
                 <Show when={m.selected()!.waitingSince}>
-                  <Chip text={`Waiting for reply · ${daysSince(m.selected()!.waitingSince!)}d`} color="#9a3412" background="#fff7ed" />
+                  <Chip text={`Waiting for reply · ${daysSince(m.selected()!.waitingSince!)}d`} color={C.warn} background={C.warnSoft} />
                 </Show>
                 <LabelChips message={m.selected()!} />
               </View>
@@ -165,7 +165,7 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
             <For each={m.conversation()}>
               {(msg) => (
                 <>
-                  <View style={hline} />
+                  <View style={hline()} />
                   <Show when={isOpen(msg)} fallback={<FoldedMessage mail={m} message={msg} onPress={() => toggle(msg.id)} />}>
                     <OpenMessage mail={m} remote={props.remote} message={msg} onPress={msg.id === m.selected()?.id ? undefined : () => toggle(msg.id)} />
                   </Show>

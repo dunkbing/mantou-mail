@@ -9,7 +9,7 @@ import { Icon, type IconName } from "./icons";
 export function ToolButton(props: { label: string; icon: IconName; hint: string; onPress: () => void; disabled?: boolean; active?: boolean; compact?: boolean }) {
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", flexShrink: 0, gap: 6, height: 30, paddingLeft: props.compact ? 8 : 10, paddingRight: props.compact ? 8 : 10, borderRadius: 6, borderWidth: 1, borderColor: props.active ? C.accent : C.line, backgroundColor: props.active ? C.accentSoft : "#ffffff", opacity: props.disabled ? 0.45 : 1 }}
+      style={{ flexDirection: "row", alignItems: "center", flexShrink: 0, gap: 6, height: 30, paddingLeft: props.compact ? 8 : 10, paddingRight: props.compact ? 8 : 10, borderRadius: 6, borderWidth: 1, borderColor: props.active ? C.accent : C.line, backgroundColor: props.active ? C.accentSoft : C.surface, opacity: props.disabled ? 0.45 : 1 }}
       onPress={() => !props.disabled && props.onPress()}
     >
       <Icon name={props.icon} size={15} color={props.active ? C.accent : C.secondary} />

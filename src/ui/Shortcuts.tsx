@@ -11,7 +11,7 @@ export const SHORTCUTS: [string, string][][] = [
 export function Shortcuts(props: { onClose: () => void }) {
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={props.onClose}>
-      <View style={{ width: 640, paddingTop: 22, paddingBottom: 24, paddingLeft: 28, paddingRight: 28, gap: 18, borderRadius: 12, backgroundColor: "#ffffff", boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
+      <View style={{ width: 640, paddingTop: 22, paddingBottom: 24, paddingLeft: 28, paddingRight: 28, gap: 18, borderRadius: 12, backgroundColor: C.surface, boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={{ flexGrow: 1, fontSize: 16, fontWeight: 700, color: C.text }}>Keyboard shortcuts</Text>
           <Kbd text="Esc" />

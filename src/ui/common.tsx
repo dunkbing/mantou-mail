@@ -76,7 +76,7 @@ export function humanSize(bytes: number): string {
 /** An attachment: its name and size; pressing opens it, ↓ (when given) saves it, × (when given) takes it off a draft. */
 export function AttachmentChip(props: { attachment: Attachment; onPress?: () => void; onSave?: () => void; onRemove?: () => void }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, flexShrink: 1, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={props.onPress}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, flexShrink: 1, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface }} onPress={props.onPress}>
       <Icon name="paperclip" size={14} color={C.secondary} />
       <View style={{ flexShrink: 1, gap: 1 }}>
         <Text style={{ fontSize: 13, fontWeight: 500, color: C.text, maxLines: 1, maxWidth: 240 }}>{props.attachment.name}</Text>

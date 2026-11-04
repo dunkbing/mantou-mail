@@ -33,7 +33,7 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
   return (
     <View
       ref={props.ref}
-      style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : "#ffffff" }}
+      style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : C.surface }}
       onPress={() => props.mail.select(msg().id)}
       onContextMenu={(e) => props.onMenu(msg(), e)}
     >
@@ -52,29 +52,29 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
           <Show when={msg().starred}>
             <Text style={{ fontSize: 12, color: C.star }}>★</Text>
           </Show>
-          <Text style={small}>{shortDate(msg().date)}</Text>
+          <Text style={small()}>{shortDate(msg().date)}</Text>
         </View>
         <Text style={{ fontSize: 13, fontWeight: msg().unread ? 600 : 400, color: C.text, maxLines: 1 }}>{msg().subject || "(no subject)"}</Text>
         <Text style={{ fontSize: 12, color: C.secondary, maxLines: 1 }}>{msg().body.join(" ").replace(/\s+/g, " ")}</Text>
         <Show when={msg().labels.length > 0 || msg().waitingSince || msg().snoozedUntil || folder() || msg().folder === "drafts" || msg().outbox}>
           <View style={{ flexDirection: "row", gap: 6, paddingTop: 4, flexWrap: "wrap" }}>
             <Show when={msg().folder === "drafts"}>
-              <Chip text="Draft" color="#b91c1c" background="#fef2f2" />
+              <Chip text="Draft" color={C.danger} background={C.dangerSoft} />
             </Show>
             <Show when={msg().outbox && !msg().outbox!.at}>
-              <Chip text="Sending…" color="#92400e" background="#fef3c7" />
+              <Chip text="Sending…" color={C.sending} background={C.sendingSoft} />
             </Show>
             <Show when={msg().outbox?.at}>
-              <Chip text={`Scheduled · ${whenShort(new Date(msg().outbox!.at!))}`} color="#3730a3" background="#eef2ff" />
+              <Chip text={`Scheduled · ${whenShort(new Date(msg().outbox!.at!))}`} color={C.accentText} background={C.accentSoft} />
             </Show>
             <Show when={folder()}>
               <Chip text={folder() ?? ""} color={C.secondary} background={C.faint} />
             </Show>
             <Show when={msg().waitingSince}>
-              <Chip text={`Waiting for reply · ${daysSince(msg().waitingSince!)}d`} color="#9a3412" background="#fff7ed" />
+              <Chip text={`Waiting for reply · ${daysSince(msg().waitingSince!)}d`} color={C.warn} background={C.warnSoft} />
             </Show>
             <Show when={msg().snoozedUntil}>
-              <Chip text={`Snoozed until ${msg().snoozedUntil}`} color="#075985" background="#f0f9ff" />
+              <Chip text={`Snoozed until ${msg().snoozedUntil}`} color={C.info} background={C.infoSoft} />
             </Show>
             <LabelChips message={msg()} />
           </View>
@@ -107,7 +107,7 @@ export function EmptyList(props: { mail: Mail }) {
       </View>
       <Text style={{ fontSize: 15, fontWeight: 600, color: C.text, textAlign: "center" }}>{text()[0]}</Text>
       <Show when={text()[1]}>
-        <Text style={[small, { textAlign: "center", lineHeight: 1.5 }]}>{text()[1]}</Text>
+        <Text style={[small(), { textAlign: "center", lineHeight: 1.5 }]}>{text()[1]}</Text>
       </Show>
     </View>
   );
@@ -139,7 +139,7 @@ function LoadOlder(props: { mail: Mail; remote: Remote }) {
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52 }} onPress={() => void load()}>
       <Icon name="archive" size={14} color={loading() ? C.muted : C.accent} />
       <Text style={{ fontSize: 13, fontWeight: 500, color: loading() ? C.muted : C.accent }}>{loading() ? "Getting older mail…" : "Load older messages"}</Text>
-      <Text style={small}>{`${n().toLocaleString("en-GB")} more on the server`}</Text>
+      <Text style={small()}>{`${n().toLocaleString("en-GB")} more on the server`}</Text>
     </View>
   );
 }
@@ -180,7 +180,7 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
     if (row && !row.released) row.scrollIntoView({ block: "nearest" });
   });
   return (
-    <Scroll ref={(n) => (list = n)} style={{ width: 400, flexShrink: 0, backgroundColor: "#ffffff" }} onScroll={(o) => ((at.offset = o.y), more())} onLayout={(r) => ((at.viewport = r.height), more())}>
+    <Scroll ref={(n) => (list = n)} style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }} onScroll={(o) => ((at.offset = o.y), more())} onLayout={(r) => ((at.viewport = r.height), more())}>
       <View onLayout={(r) => ((at.content = r.height), more())}>
         <For each={shown()} fallback={<EmptyList mail={m} />}>
           {(msg) => {
@@ -189,7 +189,7 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
             return (
               <>
                 <Row mail={m} message={msg} onMenu={menu} ref={(n) => rows.set(msg.id, (node = n))} />
-                <View style={[hline, { marginLeft: 58, backgroundColor: C.faint }]} />
+                <View style={[hline(), { marginLeft: 58, backgroundColor: C.faint }]} />
               </>
             );
           }}

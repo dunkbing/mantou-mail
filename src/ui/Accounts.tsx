@@ -25,13 +25,13 @@ function Field(props: { label: string; children: JSX.Element; note?: string }) {
       <Text style={{ width: 96, flexShrink: 0, fontSize: 13, color: C.muted }}>{props.label}</Text>
       {props.children}
       <Show when={props.note}>
-        <Text style={[small, { flexShrink: 0 }]}>{props.note}</Text>
+        <Text style={[small(), { flexShrink: 0 }]}>{props.note}</Text>
       </Show>
     </View>
   );
 }
 
-const box = (focused: boolean) => ({ height: 32, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: focused ? C.accent : C.line, backgroundColor: "#ffffff" });
+const box = (focused: boolean) => ({ height: 32, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: focused ? C.accent : C.line, backgroundColor: C.surface });
 
 /** A text field with a border that shows the focus. */
 function TextField(props: { value: string; onChange: (v: string) => void; placeholder?: string; width?: number; autoFocus?: boolean; ref?: (n: Node) => void; onSubmit?: () => void; readOnly?: boolean; secure?: boolean }) {
@@ -48,7 +48,7 @@ function TextField(props: { value: string; onChange: (v: string) => void; placeh
       onSubmit={props.onSubmit}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={[field, box(focused()), props.width ? { width: props.width, flexShrink: 0 } : { flexGrow: 1, flexBasis: 0 }, props.readOnly ? { color: C.secondary } : {}]}
+      style={[field(), box(focused()), props.width ? { width: props.width, flexShrink: 0 } : { flexGrow: 1, flexBasis: 0 }, props.readOnly ? { color: C.secondary } : {}]}
     />
   );
 }
@@ -61,14 +61,14 @@ function Guide(props: { guide: PasswordGuide; onOpen: (url: string) => void }) {
       <For each={props.guide.steps}>
         {(step, i) => (
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <Text style={[small, { width: 14, flexShrink: 0, fontWeight: 600, color: C.secondary }]}>{`${i() + 1}.`}</Text>
-            <Text style={[small, { flexShrink: 1, lineHeight: 1.45, color: C.secondary }]}>{step}</Text>
+            <Text style={[small(), { width: 14, flexShrink: 0, fontWeight: 600, color: C.secondary }]}>{`${i() + 1}.`}</Text>
+            <Text style={[small(), { flexShrink: 1, lineHeight: 1.45, color: C.secondary }]}>{step}</Text>
           </View>
         )}
       </For>
       <Show when={props.guide.url}>
         <View style={{ flexDirection: "row" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={() => props.onOpen(props.guide.url!)}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface }} onPress={() => props.onOpen(props.guide.url!)}>
             <Icon name="open" size={13} color={C.accent} />
             <Text style={{ fontSize: 12, fontWeight: 500, color: C.accent }}>{`Open ${props.guide.page ?? "the page"}`}</Text>
           </View>
@@ -99,7 +99,7 @@ function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect
         <Text style={{ fontSize: 14, fontWeight: 600, color: C.text, maxLines: 1 }}>{props.account.email}</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ width: 7, height: 7, borderRadius: 3.5, flexShrink: 0, backgroundColor: STATE_COLOR[status()?.state ?? "offline"] }} />
-          <Text style={[small, { flexShrink: 1, maxLines: 1 }]}>{status()?.detail ?? "Not connected"}</Text>
+          <Text style={[small(), { flexShrink: 1, maxLines: 1 }]}>{status()?.detail ?? "Not connected"}</Text>
         </View>
       </View>
       <Show when={status()?.state === "needs-password"}>
@@ -112,7 +112,7 @@ function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect
       value={signature()}
       placeholder="Signature, added under mail you send from this account"
       onChange={(v) => (setSignature(v), props.remote.setSignature(props.account.id, v))}
-      style={[field, { minHeight: 34, maxHeight: 90, marginLeft: 44, paddingLeft: 8, paddingTop: 6, paddingBottom: 6, fontSize: 13, borderRadius: 6, borderWidth: 1, borderColor: C.line }]}
+      style={[field(), { minHeight: 34, maxHeight: 90, marginLeft: 44, paddingLeft: 8, paddingTop: 6, paddingBottom: 6, fontSize: 13, borderRadius: 6, borderWidth: 1, borderColor: C.line }]}
     />
     </View>
   );
@@ -235,24 +235,24 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
 
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={props.onClose}>
-      <View focusScope style={{ width: 640, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff", boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 24, paddingRight: 16, backgroundColor: "#fafafa" }}>
+      <View focusScope style={{ width: 640, borderRadius: 12, overflow: "hidden", backgroundColor: C.surface, boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 24, paddingRight: 16, backgroundColor: C.subtle }}>
           <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>Accounts</Text>
           <Kbd text="Esc" />
         </View>
-        <View style={hline} />
+        <View style={hline()} />
         <Show when={accounts().length > 0}>
           <View style={{ paddingLeft: 24, paddingRight: 16, paddingTop: 6, paddingBottom: 6 }}>
             <For each={accounts()}>{(a) => <AccountRow remote={r} account={a} onReconnect={() => reconnect(a)} />}</For>
           </View>
-          <View style={hline} />
+          <View style={hline()} />
         </Show>
         <View style={{ paddingLeft: 24, paddingRight: 24, paddingTop: 18, paddingBottom: 8, gap: 4 }}>
-          <Text style={caption}>{reconnecting() ? `PASSWORD FOR ${reconnecting()!.toUpperCase()}` : oauth() ? `ADD A ${oauth()!.name.toUpperCase()} ACCOUNT` : "ADD AN IMAP ACCOUNT"}</Text>
+          <Text style={caption()}>{reconnecting() ? `PASSWORD FOR ${reconnecting()!.toUpperCase()}` : oauth() ? `ADD A ${oauth()!.name.toUpperCase()} ACCOUNT` : "ADD AN IMAP ACCOUNT"}</Text>
           <Show
             when={guide()}
             fallback={
-              <Text style={[small, { lineHeight: 1.5, paddingBottom: 8 }]}>
+              <Text style={[small(), { lineHeight: 1.5, paddingBottom: 8 }]}>
                 {oauth()
                   ? `Your browser opens ${oauth()!.name}'s sign-in page. Mantou Mail never sees your password; it keeps a sign-in in the system keychain, which you can revoke from your ${oauth()!.name} account.`
                   : intro()}
@@ -309,8 +309,8 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
           <Show when={reconnecting()}>
             <TextButton label="Cancel" onPress={() => (setReconnecting(null), setEmail(""), setPassword(""), setCustom(false))} />
           </Show>
-          <Show when={error()} fallback={<Text style={[small, { flexShrink: 1, lineHeight: 1.4 }]}>{signingIn() ? "Finish signing in in your browser." : oauth() ? "" : keychain() ? "The password is kept in the system keychain." : "There's no system keychain here: the password is kept until you quit."}</Text>}>
-            <Text style={{ flexShrink: 1, fontSize: 12, lineHeight: 1.4, color: "#b91c1c" }}>{error()}</Text>
+          <Show when={error()} fallback={<Text style={[small(), { flexShrink: 1, lineHeight: 1.4 }]}>{signingIn() ? "Finish signing in in your browser." : oauth() ? "" : keychain() ? "The password is kept in the system keychain." : "There's no system keychain here: the password is kept until you quit."}</Text>}>
+            <Text style={{ flexShrink: 1, fontSize: 12, lineHeight: 1.4, color: C.danger }}>{error()}</Text>
           </Show>
         </View>
       </View>

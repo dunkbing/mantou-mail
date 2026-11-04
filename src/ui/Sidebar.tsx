@@ -40,7 +40,7 @@ export function SearchField(props: { mail: Mail; ref: (n: Node) => void }) {
   let input: Node | undefined;
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", gap: 4, height: 32, flexShrink: 0, marginBottom: 12, paddingLeft: 10, paddingRight: 8, borderRadius: 7, borderWidth: 1, borderColor: m.searching() ? C.accent : C.line, backgroundColor: "#ffffff" }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 4, height: 32, flexShrink: 0, marginBottom: 12, paddingLeft: 10, paddingRight: 8, borderRadius: 7, borderWidth: 1, borderColor: m.searching() ? C.accent : C.line, backgroundColor: C.surface }}
       onPress={() => input?.focus()}
     >
       <Icon name="search" size={14} color={m.searching() ? C.accent : C.muted} />
@@ -107,7 +107,7 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "archive" }} name="Archive" icon="archive" />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "trash" }} name="Trash" icon="trash" count={m.count({ kind: "folder", folder: "trash" })} />
       <View style={{ height: 16 }} />
-      <Text style={[caption, { paddingLeft: 10, paddingBottom: 6 }]}>LABELS</Text>
+      <Text style={[caption(), { paddingLeft: 10, paddingBottom: 6 }]}>LABELS</Text>
       <For each={LABELS}>
         {(l) => <SidebarItem mail={m} mailbox={{ kind: "label", id: l.id }} name={l.name} dot={l.color} count={m.unread({ kind: "label", id: l.id })} />}
       </For>

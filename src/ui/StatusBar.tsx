@@ -17,7 +17,7 @@ export function StatusBar(props: { mail: Mail; remote?: Remote; onHelp: () => vo
     return all.sort((a, b) => rank(a) - rank(b))[0];
   };
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", height: 28, flexShrink: 0, paddingLeft: 16, paddingRight: 12, gap: 12, backgroundColor: "#fafafa" }}>
+    <View style={{ flexDirection: "row", alignItems: "center", height: 28, flexShrink: 0, paddingLeft: 16, paddingRight: 12, gap: 12, backgroundColor: C.subtle }}>
       <Text style={{ flexShrink: 1, fontSize: 12, color: C.secondary, maxLines: 1 }}>{m.status() || `${m.list().length} conversations`}</Text>
       <Show when={m.undoable()}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, height: 22, flexShrink: 0, paddingLeft: 6, paddingRight: 6, borderRadius: 5 }} onPress={m.undo}>
@@ -29,12 +29,12 @@ export function StatusBar(props: { mail: Mail; remote?: Remote; onHelp: () => vo
       <Show when={sync()}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
           <View style={{ width: 7, height: 7, borderRadius: 3.5, flexShrink: 0, backgroundColor: STATE_COLOR[sync()?.state ?? "ready"] }} />
-          <Text style={[small, { flexShrink: 1, maxLines: 1 }]}>{sync()?.detail ?? ""}</Text>
+          <Text style={[small(), { flexShrink: 1, maxLines: 1 }]}>{sync()?.detail ?? ""}</Text>
         </View>
       </Show>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 22, flexShrink: 0, paddingLeft: 6, paddingRight: 4 }} onPress={props.onHelp}>
         <Icon name="keyboard" size={14} color={C.muted} />
-        <Text style={small}>Keyboard shortcuts</Text>
+        <Text style={small()}>Keyboard shortcuts</Text>
         <Kbd text="?" />
       </View>
     </View>

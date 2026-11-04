@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Dark mode: the app follows the system's light or dark appearance, and changes with it.
 - Dropping files on the window while writing a message attaches them.
 - The dock icon shows how many messages are unread (macOS).
 - New mail shows a notification when the app isn't the window in front.

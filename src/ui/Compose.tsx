@@ -1,5 +1,5 @@
 // Writing mail: the reply composer under the reader, and the new-message composer.
-import { For, Input, Show, Text, View, createMemo, createSignal, defineStyle, onCleanup, onFileDrop, onKey, type Node } from "mantou-ui";
+import { For, Input, Show, Text, View, createMemo, createSignal, onCleanup, onFileDrop, onKey, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
 import { Icon } from "./icons";
 import { QUICK_REPLIES, acceptRecipient, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../state";
@@ -55,7 +55,7 @@ function AddressField(props: { mail: Mail; line: Line; autoFocus?: boolean; inse
           onChange={(v) => (m.editDraft({ [props.line]: v }), setPick(0), setMoved(false))}
           onFocus={() => setActiveLine(props.line)}
           onSubmit={() => ((moved() || !whole()) && take(pick())) || props.onNext?.()}
-          style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+          style={[field(), { flexGrow: 1, flexBasis: 0, height: 32 }]}
         />
         {props.trailing?.()}
       </View>
@@ -83,7 +83,7 @@ function AddressField(props: { mail: Mail; line: Line; autoFocus?: boolean; inse
 export function Problem(props: { mail: Mail }) {
   return (
     <Show when={props.mail.problem()}>
-      <Text style={{ flexShrink: 1, fontSize: 12, color: "#b91c1c", maxLines: 1 }}>{props.mail.problem()}</Text>
+      <Text style={{ flexShrink: 1, fontSize: 12, color: C.danger, maxLines: 1 }}>{props.mail.problem()}</Text>
     </Show>
   );
 }
@@ -140,7 +140,7 @@ function AttachButton(props: { mail: Mail; remote?: Remote }) {
           onChange={setPath}
           onSubmit={(v) => v.trim() && void add([v.trim()])}
           placeholder="Path to a file, then Enter"
-          style={[field, { flexGrow: 1, flexBasis: 0, height: 30, paddingLeft: 8, fontSize: 13, borderRadius: 6, borderWidth: 1, borderColor: C.line }]}
+          style={[field(), { flexGrow: 1, flexBasis: 0, height: 30, paddingLeft: 8, fontSize: 13, borderRadius: 6, borderWidth: 1, borderColor: C.line }]}
         />
       </Show>
     </>
@@ -151,7 +151,7 @@ function AttachButton(props: { mail: Mail; remote?: Remote }) {
 function SendLaterButton(props: { open: boolean; onPress: () => void }) {
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, flexShrink: 0, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: props.open ? C.accent : C.line, backgroundColor: props.open ? C.accentSoft : "#ffffff" }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, flexShrink: 0, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: props.open ? C.accent : C.line, backgroundColor: props.open ? C.accentSoft : C.surface }}
       onPress={props.onPress}
     >
       <Icon name="calendar" size={14} color={props.open ? C.accent : C.secondary} />
@@ -166,7 +166,7 @@ function SendLaterTimes(props: { mail: Mail }) {
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       <For each={sendLaterOptions(now())}>
         {(o) => (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 30, paddingLeft: 12, paddingRight: 12, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={() => props.mail.send(o.at)}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 30, paddingLeft: 12, paddingRight: 12, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface }} onPress={() => props.mail.send(o.at)}>
             <Text style={{ fontSize: 13, color: C.text }}>{o.name}</Text>
             <Text style={{ fontSize: 12, color: C.muted }}>{whenShort(o.at)}</Text>
           </View>
@@ -193,7 +193,7 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
         when={editing()}
         fallback={
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={[small, { flexGrow: 1, flexShrink: 1, maxLines: 1, color: C.secondary }]}>{summary()}</Text>
+            <Text style={[small(), { flexGrow: 1, flexShrink: 1, maxLines: 1, color: C.secondary }]}>{summary()}</Text>
             <Show when={m.othersOnReply().length}>
               <TextButton label={m.replyingAll() ? "Reply to sender" : "Reply all"} onPress={() => (m.setReplyAll(!m.replyingAll()), body?.focus())} />
             </Show>
@@ -201,18 +201,18 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
           </View>
         }
       >
-        <View style={{ borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }}>
+        <View style={{ borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface }}>
           <AddressField mail={m} line="to" inset={12} onNext={() => body?.focus()} />
-          <View style={hline} />
+          <View style={hline()} />
           <AddressField mail={m} line="cc" inset={12} onNext={() => body?.focus()} />
-          <View style={hline} />
+          <View style={hline()} />
           <AddressField mail={m} line="bcc" inset={12} onNext={() => body?.focus()} />
         </View>
       </Show>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <For each={QUICK_REPLIES}>
           {(text) => (
-            <View style={{ height: 28, paddingLeft: 12, paddingRight: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", justifyContent: "center" }} onPress={() => {
+            <View style={{ height: 28, paddingLeft: 12, paddingRight: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: "center" }} onPress={() => {
                 m.insertReply(text);
                 body?.focus(); // the press took the focus; give it back to keep typing
               }}>
@@ -230,7 +230,7 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
         onChange={(body) => m.editDraft({ body })}
         onFocus={() => setActiveLine(null)}
         onSubmit={() => m.send()}
-        style={[field, { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", lineHeight: 1.5 }]}
+        style={[field(), { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, lineHeight: 1.5 }]}
       />
       <DraftAttachments mail={m} />
       <Show when={later()}>
@@ -258,23 +258,23 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
   /** The Cc and Bcc lines: shown when the draft has copies, or on "Cc Bcc". */
   const [copies, setCopies] = createSignal(!!(m.draft().cc?.trim() || m.draft().bcc?.trim()));
   const label = (text: string) => <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{text}</Text>;
-  const row = defineStyle({ flexDirection: "row", alignItems: "center", minHeight: 44, paddingLeft: 20, paddingRight: 20 });
+  const row = { flexDirection: "row", alignItems: "center", minHeight: 44, paddingLeft: 20, paddingRight: 20 } as const;
   return (
     <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: C.backdrop, justifyContent: "center", alignItems: "center" }} onPress={m.closeCompose}>
       {/* focusScope: Tab stays among the composer's fields, and the focus goes back where it was when it closes. */}
-      <View focusScope style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: "#ffffff", boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 20, paddingRight: 16, backgroundColor: "#fafafa" }}>
+      <View focusScope style={{ width: 680, borderRadius: 12, overflow: "hidden", backgroundColor: C.surface, boxShadow: dialogShadow }} onPress={(e) => e.stopPropagation()}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 48, paddingLeft: 20, paddingRight: 16, backgroundColor: C.subtle }}>
           <Text style={{ flexGrow: 1, fontSize: 15, fontWeight: 600, color: C.text }}>{m.draft().id === null ? "New message" : "Draft"}</Text>
-          <Text style={[small, { paddingRight: 8 }]}>Esc keeps it in Drafts</Text>
+          <Text style={[small(), { paddingRight: 8 }]}>Esc keeps it in Drafts</Text>
           <Kbd text="Esc" />
         </View>
-        <View style={hline} />
+        <View style={hline()} />
         <View style={[row, { gap: 6 }]}>
           {label("From")}
           <For each={m.accounts()}>
             {(a) => (
               <View
-                style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 14, borderWidth: 1, justifyContent: "center", borderColor: m.draft().account === a.id ? C.accent : C.line, backgroundColor: m.draft().account === a.id ? C.accentSoft : "#ffffff" }}
+                style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 14, borderWidth: 1, justifyContent: "center", borderColor: m.draft().account === a.id ? C.accent : C.line, backgroundColor: m.draft().account === a.id ? C.accentSoft : C.surface }}
                 onPress={() => m.editDraft({ account: a.id })}
               >
                 <Text style={{ fontSize: 12, fontWeight: 500, color: m.draft().account === a.id ? C.accent : C.secondary }}>{`${a.name} · ${a.email}`}</Text>
@@ -282,7 +282,7 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
             )}
           </For>
         </View>
-        <View style={hline} />
+        <View style={hline()} />
         {/* a draft with recipients starts in the text */}
         <AddressField mail={m} line="to" autoFocus={!m.draft().to} onNext={() => (copies() ? cc : subject)?.focus()} trailing={() => (
           <Show when={!copies()}>
@@ -290,12 +290,12 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
           </Show>
         )} />
         <Show when={copies()}>
-          <View style={hline} />
+          <View style={hline()} />
           <AddressField mail={m} line="cc" ref={(n) => (cc = n)} onNext={() => bcc?.focus()} />
-          <View style={hline} />
+          <View style={hline()} />
           <AddressField mail={m} line="bcc" ref={(n) => (bcc = n)} onNext={() => subject?.focus()} />
         </Show>
-        <View style={hline} />
+        <View style={hline()} />
         <View style={row}>
           {label("Subject")}
           <Input
@@ -305,10 +305,10 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
             onChange={(subject) => m.editDraft({ subject })}
             onFocus={() => setActiveLine(null)}
             onSubmit={() => body?.focus()}
-            style={[field, { flexGrow: 1, flexBasis: 0, height: 32 }]}
+            style={[field(), { flexGrow: 1, flexBasis: 0, height: 32 }]}
           />
         </View>
-        <View style={hline} />
+        <View style={hline()} />
         <Input
           ref={(n) => (body = n)}
           multiline
@@ -318,14 +318,14 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
           onChange={(body) => m.editDraft({ body })}
           onFocus={() => setActiveLine(null)}
           onSubmit={() => m.send()}
-          style={[field, { height: 280, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20, lineHeight: 1.5 }]}
+          style={[field(), { height: 280, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20, lineHeight: 1.5 }]}
         />
         <Show when={m.draft().attachments?.length}>
           <View style={{ paddingLeft: 20, paddingRight: 20, paddingBottom: 12 }}>
             <DraftAttachments mail={m} />
           </View>
         </Show>
-        <View style={hline} />
+        <View style={hline()} />
         <Show when={later()}>
           <View style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 12 }}>
             <SendLaterTimes mail={m} />

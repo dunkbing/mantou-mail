@@ -1,9 +1,9 @@
 // Mantou Mail: a sidebar of mailboxes and labels, a message list, a reader
 // that shows the whole conversation, and keyboard triage (? lists the keys).
-import { Show, View, createEffect, createSignal, onCleanup, onKey, setBadge, setMenu, useUi, type Node } from "mantou-ui";
+import { Show, View, createEffect, createSignal, onCleanup, onKey, setBadge, setMenu, useColorScheme, useUi, type Node } from "mantou-ui";
 import { LABELS } from "./data";
 import { createMail, usesTabs, type Mail } from "./state";
-import { hline, vline } from "./ui/theme";
+import { C, hline, vline } from "./ui/theme";
 import { Sidebar } from "./ui/Sidebar";
 import { Toolbar } from "./ui/Toolbar";
 import { MessageList } from "./ui/MessageList";
@@ -18,6 +18,8 @@ import { APP_MENU, type Command } from "./ui/menu";
 export function App(props: { mail?: Mail; remote?: Remote }) {
   const m = props.mail ?? createMail();
   const ui = useUi();
+  // The theme (src/ui/theme.ts) is made before a window exists, so it starts following the system once the app mounts: see dunkbing/mantou#54.
+  useColorScheme();
   const [help, setHelp] = createSignal(false);
   const [accounts, setAccounts] = createSignal(false);
   let searchInput: Node | undefined;
@@ -128,19 +130,19 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   return (
     // minHeight 0: flex items are at least as tall as their content otherwise
     // (as in CSS), and the list and reader clip and scroll instead.
-    <View onLayout={installMenu} style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: "#ffffff" }}>
+    <View onLayout={installMenu} style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: C.surface }}>
       <Sidebar mail={m} remote={props.remote} searchRef={(n) => (searchInput = n)} onAccounts={() => setAccounts(true)} />
-      <View style={vline} />
+      <View style={vline()} />
       <View style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}>
         <Toolbar mail={m} />
-        <View style={hline} />
+        <View style={hline()} />
         {/* flexBasis 0: the row's height comes from the window, not from what's scrolled inside it. */}
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
           <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
-          <View style={vline} />
+          <View style={vline()} />
           <Reader mail={m} remote={props.remote} />
         </View>
-        <View style={hline} />
+        <View style={hline()} />
         <StatusBar mail={m} remote={props.remote} onHelp={() => setHelp(true)} />
       </View>
       <Show when={m.composing()}>
