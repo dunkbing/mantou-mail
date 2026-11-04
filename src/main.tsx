@@ -18,4 +18,4 @@ const start = remote.initial();
 const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
 void remote.attach(mail);
 
-run(() => <App mail={mail} remote={remote} />, { title: "Mantou Mail", width: 1200, height: 760, minWidth: 980, minHeight: 600 });
+run(() => <App mail={mail} remote={remote} />, { title: "Mantou Mail", width: 1200, height: 760, minWidth: 980, minHeight: 600, titleBar: "overlay" });

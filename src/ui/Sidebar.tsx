@@ -1,5 +1,5 @@
 // The sidebar: Compose, search, mailboxes and labels.
-import { For, Input, Show, Text, View, type Node } from "mantou-ui";
+import { For, Input, Show, Text, View, win, type Node } from "mantou-ui";
 import { LABELS } from "../data";
 import { sameMailbox, type Mail, type Mailbox } from "../state";
 import { C, caption, buttonShadow } from "./theme";
@@ -65,7 +65,9 @@ export function SearchField(props: { mail: Mail; ref: (n: Node) => void }) {
 export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Node) => void; onAccounts: () => void }) {
   const m = props.mail;
   return (
-    <View style={{ width: 228, flexShrink: 0, paddingTop: 18, paddingLeft: 12, paddingRight: 12, gap: 2, backgroundColor: C.sidebar }}>
+    <View style={{ width: 228, flexShrink: 0, paddingLeft: 12, paddingRight: 12, gap: 2, backgroundColor: C.sidebar }}>
+      {/* Under the traffic lights (titleBar: "overlay" in main.tsx); it moves the window (painted: an empty view without a background isn't hit, dunkbing/mantou#56). */}
+      <View dragRegion style={{ height: win.safeArea.top + 10, flexShrink: 0, marginLeft: -12, marginRight: -12, backgroundColor: C.sidebar }} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 8, paddingBottom: 14 }}>
         <View style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, backgroundColor: C.accent, justifyContent: "center" }}>
           <Text style={{ color: "#ffffff", fontWeight: 700, fontSize: 14, textAlign: "center" }}>M</Text>

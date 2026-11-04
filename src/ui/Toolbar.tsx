@@ -44,7 +44,7 @@ export function Toolbar(props: { mail: Mail }) {
   const size = useWindowSize();
   const compact = () => size().width > 0 && size().width < 1200;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", height: 52, flexShrink: 0, paddingLeft: 20, paddingRight: 16, gap: 18 }}>
+    <View dragRegion style={{ flexDirection: "row", alignItems: "center", height: 52, flexShrink: 0, paddingLeft: 20, paddingRight: 16, gap: 18 }}>
       <Show when={usesTabs(m.mailbox())} fallback={<Text style={{ flexShrink: 1, fontSize: 15, fontWeight: 600, color: C.text, maxLines: 1 }}>{m.mailboxName(m.mailbox())}</Text>}>
         <TabButton mail={m} tab="important" name="Important" />
         <TabButton mail={m} tab="other" name="Other" />

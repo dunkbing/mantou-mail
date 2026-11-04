@@ -112,6 +112,27 @@ test("delete forever waits for the undo window, then expunges", async () => {
   expect(await server.folder("Trash")).toEqual([]);
 });
 
+test("a selected message stays selected while the server's changes come in (and the list isn't rebuilt for nothing)", async () => {
+  const env = await setup();
+  const { mail } = env;
+  await addAccount(env);
+  const pick = mail.list().find((m) => m.subject === "Onboarding review")!;
+  mail.select(pick.id);
+  const ids: number[] = [];
+  const watch = setInterval(() => ids.push(mail.selected()?.id ?? -1), 2);
+  let receives = 0;
+  const orig = mail.receive;
+  mail.receive = (a, l) => (receives++, orig(a, l));
+  await env.server.deliver("INBOX", { from: "Zed <zed@example.com>", subject: "More mail", body: "Hi", date: "Mon, 09 Nov 2026 09:00:00 +0000" });
+  await until(() => mail.messages().some((m) => m.subject === "More mail"), "the new mail");
+  await env.server.deliver("INBOX", { from: "Yan <yan@example.com>", subject: "Even more", body: "Hi", date: "Mon, 09 Nov 2026 10:00:00 +0000" });
+  await until(() => mail.messages().some((m) => m.subject === "Even more"), "more mail");
+  await Bun.sleep(300); // what the server says about the read flag comes back
+  clearInterval(watch);
+  expect(new Set(ids)).toEqual(new Set([pick.id]));
+  expect(mail.messages().find((m) => m.id === pick.id)!.unread).toBe(false); // and it's still read
+});
+
 test("new mail arrives while the app is open (IDLE)", async () => {
   const env = await setup();
   const { mail, server } = env;
