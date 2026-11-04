@@ -1,10 +1,11 @@
 // The message list: a row per message, scrolled with the wheel.
-import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, type Node } from "mantou-ui";
+import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, showMenu, useWindowSize, type Node, type PointerEvent } from "mantou-ui";
 import { daysSince, now, shortDate, type Message } from "../data";
 import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
 import { Icon, type IconName } from "./icons";
+import { ROW_MENU } from "./menu";
 import type { Remote } from "../mail/remote";
 
 export const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
@@ -23,7 +24,7 @@ export function rowName(mail: Mail, msg: Message) {
   return to ? `To: ${to}` : msg.folder === "drafts" ? "Draft" : msg.from.name;
 }
 
-export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void }) {
+export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void; onMenu: (message: Message, e: PointerEvent) => void }) {
   const msg = () => props.message;
   const selected = () => props.mail.selected()?.id === msg().id;
   const size = () => props.mail.threadSize(msg());
@@ -34,6 +35,7 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
       ref={props.ref}
       style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : "#ffffff" }}
       onPress={() => props.mail.select(msg().id)}
+      onContextMenu={(e) => props.onMenu(msg(), e)}
     >
       <View style={{ width: 6, height: 6, flexShrink: 0, marginTop: 13, borderRadius: 3, backgroundColor: msg().unread ? C.unread : "transparent" }} />
       <Avatar name={msg().from.name} size={32} />
@@ -142,9 +144,17 @@ function LoadOlder(props: { mail: Mail; remote: Remote }) {
   );
 }
 
-export function MessageList(props: { mail: Mail; remote?: Remote }) {
+export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id: string) => void }) {
   const m = props.mail;
   let list: Node | undefined;
+  const size = useWindowSize();
+  // A right click (or Control + click) selects the row, then asks what to do with it: its commands are the app menu's.
+  const menu = (msg: Message, e: PointerEvent) => {
+    m.select(msg.id);
+    // Workaround for dunkbing/mantou#51: on macOS the menu's y is measured from the bottom of the window.
+    const y = process.platform === "darwin" ? size().height - e.y : e.y;
+    void showMenu(ROW_MENU, { x: e.x, y }).then((id) => id && props.onCommand(id));
+  };
   const rows = new Map<number, Node>();
   const [limit, setLimit] = createSignal(PAGE);
   // The scroll's offset and sizes as the core last reported them.
@@ -178,7 +188,7 @@ export function MessageList(props: { mail: Mail; remote?: Remote }) {
             onCleanup(() => rows.get(msg.id) === node && rows.delete(msg.id));
             return (
               <>
-                <Row mail={m} message={msg} ref={(n) => rows.set(msg.id, (node = n))} />
+                <Row mail={m} message={msg} onMenu={menu} ref={(n) => rows.set(msg.id, (node = n))} />
                 <View style={[hline, { marginLeft: 58, backgroundColor: C.faint }]} />
               </>
             );

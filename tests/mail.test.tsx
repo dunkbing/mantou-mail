@@ -394,6 +394,21 @@ test("a big mailbox renders a page of rows at a time: more as the scroll nears t
   expect(rendered()).toBe(PAGE); // a new mailbox starts again from one page
 });
 
+test("a right click on a row selects it and opens a menu of what to do with it", async () => {
+  const { h, mail } = app();
+  const [x, y] = h.rect(text(h, "Sunday lunch?"))!;
+  h.pointerButton("down", 2, x + 10, y + 5);
+  await Bun.sleep(0);
+  const asked = h.lastService() as unknown as { kind: string; x: number; y: number; items: { id?: string; label?: string }[] };
+  expect([asked.x, asked.y]).toEqual([x + 10, process.platform === "darwin" ? 760 - (y + 5) : y + 5]); // macOS counts y from the bottom (dunkbing/mantou#51)
+  expect(asked.kind).toBe("showMenu");
+  expect(asked.items.filter((i) => i.id).map((i) => i.id)).toEqual(["reply", "replyAll", "forward", "archive", "inbox", "delete", "snooze", "label", "star", "unread"]);
+  expect(mail.selected()!.subject).toBe("Sunday lunch?");
+  h.chooseMenu("archive");
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
+  expect(mail.messages().find((m) => m.subject === "Sunday lunch?")!.folder).toBe("archive");
+});
+
 test("Send Later presets: in an hour, tomorrow morning and afternoon, Monday", () => {
   const at = (from: string) => sendLaterOptions(new Date(from)).map((o) => `${o.name} ${o.at.toString().slice(0, 21)}`);
   expect(at("2026-11-03T09:30:00")).toEqual(["In an hour Tue Nov 03 2026 10:30", "Tomorrow morning Wed Nov 04 2026 08:00", "Tomorrow afternoon Wed Nov 04 2026 13:00", "Monday morning Mon Nov 09 2026 08:00"]);

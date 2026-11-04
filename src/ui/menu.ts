@@ -10,6 +10,13 @@ export type Command =
 const item = (id: Command, label: string, accelerator?: string): MenuItem => ({ id, label, ...(accelerator && { accelerator }) });
 const sep: MenuItem = { separator: true };
 
+/** The menu a right click on a message row opens (the same commands as the app menu). */
+export const ROW_MENU: MenuItem[] = [
+  item("reply", "Reply"), item("replyAll", "Reply All"), item("forward", "Forward"), sep,
+  item("archive", "Archive"), item("inbox", "Move to Inbox"), item("delete", "Delete"), sep,
+  item("snooze", "Snooze…"), item("label", "Label…"), item("star", "Star"), item("unread", "Mark as Read or Unread"),
+];
+
 export const APP_MENU: MenuItem[] = [
   { label: "Mantou Mail", items: [{ role: "about" }, sep, item("accounts", "Accounts…", "cmd+,"), sep, { role: "hide" }, { role: "hideOthers" }, { role: "showAll" }, sep, { role: "quit" }] },
   { label: "File", items: [item("compose", "New Message", "cmd+n")] },

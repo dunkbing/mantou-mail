@@ -56,10 +56,11 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   const installMenu = () => {
     if (!menuSet) void setMenu(APP_MENU).then((ok) => (menuSet = ok));
   };
-  onCleanup(ui.onMenu((id) => {
+  const runCommand = (id: string) => {
     if (accounts() || help() || m.composing()) return; // a dialog is open: the menu waits, as the keys do
     commands[id as Command]?.();
-  }));
+  };
+  onCleanup(ui.onMenu(runCommand));
   onKey((e) => {
     if (e.type !== "keyDown") return;
     if (accounts()) {
@@ -134,7 +135,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
         <View style={hline} />
         {/* flexBasis 0: the row's height comes from the window, not from what's scrolled inside it. */}
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
-          <MessageList mail={m} remote={props.remote} />
+          <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
           <View style={vline} />
           <Reader mail={m} remote={props.remote} />
         </View>
