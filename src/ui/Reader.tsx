@@ -8,6 +8,7 @@ import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
 import { Avatar, Chip, LabelChips, Kbd, AttachmentChip } from "./common";
 import { ReplyComposer } from "./Compose";
+import { Icon } from "./icons";
 
 export function displayName(mail: Mail, msg: Message) {
   return mail.isMine(msg.from) ? "Me" : msg.from.name;
@@ -122,6 +123,18 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
         <Scroll ref={(n) => (scroll = n)} style={{ flexGrow: 1, minHeight: 0 }}>
           <View style={{ paddingTop: 28, paddingLeft: 36, paddingRight: 36, paddingBottom: 28, gap: 18 }}>
             <Text style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject || "(no subject)"}</Text>
+            <Show when={m.selected()!.folder === "scheduled" && m.selected()!.outbox?.at}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 10, borderRadius: 8, backgroundColor: C.accentSoft }}>
+                <Icon name="calendar" size={16} color={C.accent} />
+                <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 13, fontWeight: 500, color: C.accent, maxLines: 1 }}>{`Scheduled for ${longDate(new Date(m.selected()!.outbox!.at!))}`}</Text>
+                <View style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 6, justifyContent: "center", backgroundColor: C.accent }} onPress={m.sendNow}>
+                  <Text style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Send now</Text>
+                </View>
+                <View style={{ height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 6, justifyContent: "center", borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={m.editScheduled}>
+                  <Text style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Edit</Text>
+                </View>
+              </View>
+            </Show>
             <Show when={m.selected()!.folder === "drafts"}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <Chip text="Draft" color="#b91c1c" background="#fef2f2" />

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { Remote } from "../src/mail/remote";
 import { memorySecrets } from "../src/mail/secrets";
 import { Store } from "../src/mail/store";
+import { now } from "../src/data";
 import { Blobs } from "../src/mail/blobs";
 import { createMail, type Mail } from "../src/state";
 import { imapServer, until } from "./server";
@@ -337,4 +338,57 @@ test("sending with an attachment, and forwarding one that's still on the server"
   expect(fwd).toMatch(/filename=q4-okrs\.pdf/);
   expect(fwd).toContain(Buffer.from(PDF).toString("base64")); // downloaded from the server's copy to go along
   await remote.outboxEmpty();
+});
+
+// ---------------------------------------------------------------- Send Later
+
+const soon = (ms: number) => new Date(now().getTime() + ms); // the tests' clock is fixed: this is ms from "now"
+
+test("Send Later: a real account's message is sent at its time, over SMTP, and filed in Sent", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  await addAccount(env);
+  mail.compose();
+  mail.editDraft({ to: "jonas@example.com", subject: "Later", body: "Sent at its time." });
+  expect(mail.send(soon(80))).toBe(true);
+  expect(mail.messages().find((m) => m.subject === "Later")).toMatchObject({ folder: "scheduled", outbox: { at: soon(80).toISOString() } });
+  await Bun.sleep(30);
+  expect(server.smtp.received).toEqual([]); // not before its time
+  await until(() => server.smtp.received.length === 1, "its time");
+  await remote.outboxEmpty();
+  await until(() => mail.messages().some((m) => m.subject === "Later" && m.remote?.path === "Sent"), "the copy in Sent");
+  expect(mail.count({ kind: "folder", folder: "scheduled" })).toBe(0);
+});
+
+test("deleting a scheduled message cancels it; one scheduled when the app stops goes after the next start", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const first = await setup({ dir });
+  const a = await addAccount(first);
+  first.mail.compose();
+  first.mail.editDraft({ to: "jonas@example.com", subject: "Cancelled", body: "Never sent." });
+  first.mail.send(soon(60));
+  first.mail.open({ kind: "folder", folder: "scheduled" });
+  first.mail.remove();
+  expect(first.mail.messages().find((m) => m.subject === "Cancelled")).toMatchObject({ folder: "trash", outbox: undefined });
+  first.mail.compose();
+  first.mail.editDraft({ to: "jonas@example.com", subject: "After a restart", body: "Kept." });
+  first.mail.send(soon(60));
+  await first.remote.stop(); // before its time
+  await Bun.sleep(100);
+  expect(first.server.smtp.received).toEqual([]);
+  first.store.close();
+
+  const store = new Store(dir);
+  cleanup.push(() => store.close());
+  const secrets = memorySecrets();
+  await secrets.set(a.id, first.server.password);
+  const remote = new Remote(store, secrets);
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  expect(mail.count({ kind: "folder", folder: "scheduled" })).toBe(1);
+  await remote.attach(mail);
+  await until(() => first.server.smtp.received.length === 1, "the scheduled message");
+  expect(first.server.smtp.received[0].raw).toContain("Subject: After a restart");
 });

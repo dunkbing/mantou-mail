@@ -5,7 +5,7 @@
 import { createSignal } from "mantou-ui";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { SAMPLE_ACCOUNTS, sampleMessages, type Attachment, type Folder, type Message } from "../data";
+import { SAMPLE_ACCOUNTS, longDate, now, sampleMessages, type Attachment, type Folder, type Message } from "../data";
 import { Blobs } from "./blobs";
 import { downloadsDir, freeName, openWithSystem, pickFiles, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
@@ -81,19 +81,30 @@ export class Remote {
       else this.setStatus(a.id, { state: "needs-password", detail: `Enter the password for ${a.email} to sync it` });
     }
     // What was in the outbox when the app last stopped goes now.
-    for (const m of mail.messages()) if (m.outbox && this.isReal(m.account)) this.queueSend(m, 0);
+    for (const m of mail.messages()) if (m.outbox && this.isReal(m.account)) this.queueSend(m, 0); // and scheduled ones at their time
   }
 
   private isReal(account: string) {
     return this.store.accounts().some((x) => x.id === account);
   }
 
+  /**
+   * Puts a message in the outbox: it goes after the Undo Send delay, or at its
+   * Send Later time (by the app's clock, so tests can fix it), or now if that's past.
+   */
   private queueSend(m: Message, delay = this.options.undoSend ?? UNDO_SEND_MS) {
     if (this.outbox.has(m.id)) return;
-    this.outbox.set(m.id, setTimeout(() => {
-      this.outbox.delete(m.id);
-      void this.deliver(m.id);
-    }, delay));
+    const at = m.outbox?.at ? Date.parse(m.outbox.at) : now().getTime() + delay;
+    // setTimeout holds at most about 24.8 days; a later time waits in steps.
+    const wait = () => {
+      const left = at - now().getTime();
+      this.outbox.set(m.id, setTimeout(() => {
+        if (at - now().getTime() > 1_000) return wait();
+        this.outbox.delete(m.id);
+        void this.deliver(m.id);
+      }, Math.max(0, Math.min(left, 2 ** 31 - 1))));
+    };
+    wait();
   }
 
   private cancelSend(id: number) {
@@ -105,7 +116,8 @@ export class Remote {
   private async deliver(id: number) {
     const mail = this.mail;
     const m = mail?.messages().find((x) => x.id === id);
-    if (!mail || !m?.outbox) return;
+    if (!mail || !m?.outbox || (m.folder !== "sent" && m.folder !== "scheduled")) return;
+    const late = m.outbox.at && now().getTime() - Date.parse(m.outbox.at) > 60_000 ? m.outbox.at : undefined;
     const cfg = this.accounts().find((a) => a.id === m.account);
     const password = cfg && (await this.secrets.get(cfg.id));
     const names = (m.to ?? []).map((c) => c.name).join(", ");
@@ -120,14 +132,14 @@ export class Remote {
     let raw: Buffer;
     try {
       const files = await Promise.all((m.attachments ?? []).map(async (a) => ({ name: a.name, type: a.type, content: await this.bytesOf(a) })));
-      raw = await compose(m, original, files);
+      raw = await compose({ ...m, date: now() }, original, files);
       await sendSmtp(smtp, password, m, raw);
     } catch (e) {
       return fail((e as Error).message);
     }
-    mail.patchQuiet(id, { outbox: undefined });
+    mail.patchQuiet(id, { outbox: undefined, folder: "sent", date: now() });
     this.store.put(mail.messages().filter((x) => x.id === id));
-    mail.note(`Sent to ${names}`);
+    mail.note(late ? `Sent to ${names}: it was scheduled for ${longDate(new Date(late))}, while the app wasn't running` : `Sent to ${names}`);
     await this.syncs.get(cfg.id)?.fileSent(raw, !savesSent(smtp.host)).catch(() => {});
   }
 
@@ -227,7 +239,13 @@ export class Remote {
         else sync?.changed(b, a);
       } else if (this.isReal(a.account)) {
         local.push(a);
-        if (a.outbox && !b?.outbox) this.queueSend(a); // sent: into the outbox
+        // Sent: into the outbox. Rescheduled or sent now: again. Unscheduled or deleted: out of it.
+        if (a.outbox && (a.folder === "sent" || a.folder === "scheduled")) {
+          if (!b?.outbox || b.outbox.at !== a.outbox.at) {
+            this.cancelSend(id);
+            this.queueSend(a);
+          }
+        } else if (b?.outbox) this.cancelSend(id);
       }
     }
     const gone: number[] = [];

@@ -102,6 +102,7 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
       <SidebarItem mail={m} mailbox={{ kind: "starred" }} name="Starred" icon="starOutline" count={m.count({ kind: "starred" })} />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "snoozed" }} name="Snoozed" icon="clock" count={m.count({ kind: "folder", folder: "snoozed" })} />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "drafts" }} name="Drafts" icon="doc" count={m.count({ kind: "folder", folder: "drafts" })} />
+      <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "scheduled" }} name="Scheduled" icon="calendar" count={m.count({ kind: "folder", folder: "scheduled" })} />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "sent" }} name="Sent" icon="sent" />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "archive" }} name="Archive" icon="archive" />
       <SidebarItem mail={m} mailbox={{ kind: "folder", folder: "trash" }} name="Trash" icon="trash" count={m.count({ kind: "folder", folder: "trash" })} />

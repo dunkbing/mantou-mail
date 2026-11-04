@@ -2,7 +2,9 @@
 import { For, Input, Show, Text, View, createSignal, defineStyle, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
 import { Icon } from "./icons";
-import { QUICK_REPLIES, type Mail } from "../state";
+import { QUICK_REPLIES, sendLaterOptions, type Mail } from "../state";
+import { now } from "../data";
+import { whenShort } from "./MessageList";
 import { C, hline, small, field } from "./theme";
 import { AttachmentChip, Kbd, SendButton, TextButton } from "./common";
 
@@ -68,9 +70,39 @@ function AttachButton(props: { mail: Mail; remote?: Remote }) {
   );
 }
 
+/** "Send later": opens the row of times (SendLaterTimes) under it. */
+function SendLaterButton(props: { open: boolean; onPress: () => void }) {
+  return (
+    <View
+      style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, flexShrink: 0, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: props.open ? C.accent : C.line, backgroundColor: props.open ? C.accentSoft : "#ffffff" }}
+      onPress={props.onPress}
+    >
+      <Icon name="calendar" size={14} color={props.open ? C.accent : C.secondary} />
+      <Text style={{ fontSize: 13, fontWeight: 500, color: props.open ? C.accent : C.secondary }}>Send later</Text>
+    </View>
+  );
+}
+
+/** When to send it: the presets, each with its day and time. Pressing one schedules the draft. */
+function SendLaterTimes(props: { mail: Mail }) {
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      <For each={sendLaterOptions(now())}>
+        {(o) => (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 30, paddingLeft: 12, paddingRight: 12, borderRadius: 15, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={() => props.mail.send(o.at)}>
+            <Text style={{ fontSize: 13, color: C.text }}>{o.name}</Text>
+            <Text style={{ fontSize: 12, color: C.muted }}>{whenShort(o.at)}</Text>
+          </View>
+        )}
+      </For>
+    </View>
+  );
+}
+
 /** A reply, written under the conversation. Quick replies are starting points. */
 export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
+  const [later, setLater] = createSignal(false);
   let body: Node | undefined;
   return (
     <View style={{ gap: 10 }}>
@@ -97,8 +129,12 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
         style={[field, { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff", lineHeight: 1.5 }]}
       />
       <DraftAttachments mail={m} />
+      <Show when={later()}>
+        <SendLaterTimes mail={m} />
+      </Show>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <SendButton onPress={() => m.send()} />
+        <SendLaterButton open={later()} onPress={() => setLater(!later())} />
         <TextButton label="Discard" onPress={m.discard} />
         <AttachButton mail={m} remote={props.remote} />
         <Problem mail={m} />
@@ -110,6 +146,7 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
 /** A new message (or a saved draft), over the app: From, To, Subject, the text. */
 export function Composer(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
+  const [later, setLater] = createSignal(false);
   let subject: Node | undefined;
   let body: Node | undefined;
   const label = (text: string) => <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{text}</Text>;
@@ -178,8 +215,14 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
           </View>
         </Show>
         <View style={hline} />
+        <Show when={later()}>
+          <View style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 12 }}>
+            <SendLaterTimes mail={m} />
+          </View>
+        </Show>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 56, paddingLeft: 16, paddingRight: 16 }}>
           <SendButton onPress={() => m.send()} />
+          <SendLaterButton open={later()} onPress={() => setLater(!later())} />
           <TextButton label="Discard" onPress={m.discard} />
           <AttachButton mail={m} remote={props.remote} />
           <Problem mail={m} />

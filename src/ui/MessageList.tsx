@@ -1,6 +1,6 @@
 // The message list: a row per message, scrolled with the wheel.
 import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, type Node } from "mantou-ui";
-import { daysSince, shortDate, type Message } from "../data";
+import { daysSince, now, shortDate, type Message } from "../data";
 import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
@@ -8,6 +8,13 @@ import { Icon, type IconName } from "./icons";
 import type { Remote } from "../mail/remote";
 
 export const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
+
+/** "Wed 08:00", or "4 Dec 08:00" more than a week away. */
+export function whenShort(d: Date): string {
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const days = (d.getTime() - now().getTime()) / 86_400_000;
+  return `${days < 6.5 ? d.toLocaleDateString("en-GB", { weekday: "short" }) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${time}`;
+}
 
 /** Who a row is about: the sender, or for mail you wrote, who it's to. */
 export function rowName(mail: Mail, msg: Message) {
@@ -52,8 +59,11 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
             <Show when={msg().folder === "drafts"}>
               <Chip text="Draft" color="#b91c1c" background="#fef2f2" />
             </Show>
-            <Show when={msg().outbox}>
+            <Show when={msg().outbox && !msg().outbox!.at}>
               <Chip text="Sending…" color="#92400e" background="#fef3c7" />
+            </Show>
+            <Show when={msg().outbox?.at}>
+              <Chip text={`Scheduled · ${whenShort(new Date(msg().outbox!.at!))}`} color="#3730a3" background="#eef2ff" />
             </Show>
             <Show when={folder()}>
               <Chip text={folder() ?? ""} color={C.secondary} background={C.faint} />
@@ -83,7 +93,7 @@ export function EmptyList(props: { mail: Mail }) {
   const icon = (): IconName => {
     const box = m.mailbox();
     if (box.kind === "search") return "search";
-    if (box.kind === "folder") return ({ snoozed: "clock", drafts: "doc", sent: "sent", archive: "archive", trash: "trash" } as const)[box.folder];
+    if (box.kind === "folder") return ({ snoozed: "clock", drafts: "doc", scheduled: "calendar", sent: "sent", archive: "archive", trash: "trash" } as const)[box.folder];
     if (box.kind === "starred") return "starOutline";
     if (box.kind === "label") return "tag";
     return "check";

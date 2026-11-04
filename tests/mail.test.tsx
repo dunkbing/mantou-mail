@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
-import { createMail, parseRecipients, type Mail } from "../src/state";
+import { createMail, parseRecipients, sendLaterOptions, type Mail } from "../src/state";
 import { sampleMessages } from "../src/data";
 import { PAGE } from "../src/ui/MessageList";
 
@@ -391,6 +391,53 @@ test("a big mailbox renders a page of rows at a time: more as the scroll nears t
   h.key("2");
   h.key("1");
   expect(rendered()).toBe(PAGE); // a new mailbox starts again from one page
+});
+
+test("Send Later presets: in an hour, tomorrow morning and afternoon, Monday", () => {
+  const at = (from: string) => sendLaterOptions(new Date(from)).map((o) => `${o.name} ${o.at.toString().slice(0, 21)}`);
+  expect(at("2026-11-03T09:30:00")).toEqual(["In an hour Tue Nov 03 2026 10:30", "Tomorrow morning Wed Nov 04 2026 08:00", "Tomorrow afternoon Wed Nov 04 2026 13:00", "Monday morning Mon Nov 09 2026 08:00"]);
+  expect(at("2026-11-08T21:12:00")[3]).toBe("Monday morning (tomorrow) Mon Nov 09 2026 08:00"); // on a Sunday
+  expect(at("2026-11-09T07:00:00")[3]).toBe("Monday morning Mon Nov 16 2026 08:00"); // on a Monday: next week's
+});
+
+test("Send Later: the message waits in Scheduled, then goes; Edit takes it back to Drafts", () => {
+  const { h, mail } = app();
+  h.key("c");
+  h.type("Jonas Weber <jonas@acme.io>");
+  h.key("Enter");
+  h.type("Renewal call");
+  h.key("Enter");
+  h.type("The 15th works.");
+  h.press(text(h, "Send later"));
+  h.press(text(h, "Tomorrow morning"));
+  expect(mail.composing()).toBe(false);
+  expect(texts(h)).toContain("Scheduled for Wed 4 Nov, 08:00");
+  expect(mail.count({ kind: "folder", folder: "scheduled" })).toBe(1);
+  h.press(text(h, "Scheduled"));
+  expect(texts(h)).toContain("Scheduled · Wed 08:00");
+  expect(texts(h)).toContain("Send now");
+  mail.deliverDue(new Date("2026-11-04T07:59:00"));
+  expect(mail.count({ kind: "folder", folder: "scheduled" })).toBe(1); // not yet
+  mail.deliverDue(new Date("2026-11-04T08:00:00"));
+  expect(mail.count({ kind: "folder", folder: "scheduled" })).toBe(0);
+  h.press(text(h, "Sent"));
+  expect(mail.list()[0]).toMatchObject({ subject: "Renewal call", outbox: undefined });
+
+  // Scheduled again, then edited: back in the composer and in Drafts, unscheduled.
+  h.key("c");
+  h.type("alex.kim@hey.com");
+  h.key("Enter");
+  h.type("Lisbon");
+  h.press(text(h, "Send later"));
+  h.press(text(h, "Monday morning"));
+  h.press(text(h, "Scheduled"));
+  h.press(text(h, "Edit"));
+  expect(mail.composing()).toBe(true);
+  expect(mail.draft()).toMatchObject({ to: "Alex Kim <alex.kim@hey.com>", subject: "Lisbon" }); // named from his earlier mail
+  expect(mail.count({ kind: "folder", folder: "scheduled" })).toBe(0);
+  expect(mail.count({ kind: "folder", folder: "drafts" })).toBe(1);
+  h.press(text(h, "Send"));
+  expect(mail.count({ kind: "folder", folder: "drafts" })).toBe(0);
 });
 
 test("it draws: sidebar, accent, text", () => {

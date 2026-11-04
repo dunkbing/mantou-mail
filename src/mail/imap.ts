@@ -45,7 +45,7 @@ const FOLDERS: [Folder, string[], RegExp][] = [
   ["trash", ["\\Trash"], /^(trash|deleted( items| messages)?|bin|\[gmail\]\/(trash|bin))$/i],
 ];
 /** When the same message is in several folders (Gmail's All Mail), which copy shows. */
-const PRIORITY: Record<Folder, number> = { inbox: 0, snoozed: 0, drafts: 1, sent: 2, trash: 3, archive: 4 };
+const PRIORITY: Record<Folder, number> = { inbox: 0, snoozed: 0, drafts: 1, scheduled: 1, sent: 2, trash: 3, archive: 4 };
 
 export function folderPaths(list: ListResponse[]): Map<Folder, string> {
   const paths = new Map<Folder, string>();

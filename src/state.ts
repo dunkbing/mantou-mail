@@ -66,6 +66,23 @@ export const SNOOZE_OPTIONS = [
   { name: "Next week", time: "Mon 08:00", until: "Mon 9 Nov, 08:00" },
 ];
 
+/** Send Later presets, from a moment: in an hour, tomorrow morning and afternoon, Monday morning. */
+export function sendLaterOptions(from: Date): { name: string; at: Date }[] {
+  const at = (days: number, h: number) => {
+    const d = new Date(from);
+    d.setDate(d.getDate() + days);
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const toMonday = ((8 - from.getDay()) % 7) || 7; // the next Monday, a week on if it's Monday
+  return [
+    { name: "In an hour", at: new Date(Math.ceil((from.getTime() + 3_600_000) / 300_000) * 300_000) },
+    { name: "Tomorrow morning", at: at(1, 8) },
+    { name: "Tomorrow afternoon", at: at(1, 13) },
+    { name: toMonday === 1 ? "Monday morning (tomorrow)" : "Monday morning", at: at(toMonday, 8) },
+  ];
+}
+
 /** The panel under the reader: the reply composer, snooze times, or labels. */
 export type Panel = "reply" | "snooze" | "labels" | null;
 
@@ -355,6 +372,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     /** Deletes the message: to the trash, or for good from the trash (undo still brings it back). */
     remove() {
       if (selected()?.folder === "trash") leave((s) => (ms) => ms.filter((m) => m.id !== s.id), () => "Deleted forever");
+      else if (selected()?.folder === "scheduled") file("trash", "Cancelled and deleted", { outbox: undefined });
       else file("trash", "Deleted", { unread: false });
     },
     moveToInbox() {
@@ -471,7 +489,8 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       });
     },
     /** Sends the draft; false (and why, in the status) if it can't go yet. */
-    send(): boolean {
+    /** Sends the draft, now (after Undo Send) or, with `at`, then (Send Later); false, with the reason, if it can't go. */
+    send(at?: Date): boolean {
       const d = draft();
       const { ok, bad } = parseRecipients(d.to, contacts());
       if (bad.length) return setProblem(`“${bad[0]}” isn't an email address`), false;
@@ -487,24 +506,57 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       // message takes the next id, so the two don't share one).
       saveDraft();
       const saved = draft().id;
+      const later = at && at.getTime() > now().getTime() ? at : undefined;
       const sent: Message = {
-        id: nextId(), account: d.account, folder: "sent", from, to: ok,
-        subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: now(),
+        id: nextId(), account: d.account, folder: later ? "scheduled" : "sent", from, to: ok,
+        subject: d.subject.trim() || "(no subject)", body: paragraphs(d.body), date: later ?? now(),
         unread: false, starred: false, important: true, labels: [], thread: original ? threadOf(original) : undefined,
         attachments: d.attachments?.length ? d.attachments : undefined,
-        ...(real ? { messageId: `${crypto.randomUUID()}@${from.email.split("@")[1] ?? "mantou.mail"}`, outbox: { replyTo: original?.id } } : {}),
+        ...(real ? { messageId: `${crypto.randomUUID()}@${from.email.split("@")[1] ?? "mantou.mail"}` } : {}),
+        // A real account's mail goes through the outbox; sample mail only when it's scheduled (deliverDue sends it).
+        ...(real || later ? { outbox: { replyTo: original?.id, ...(later ? { at: later.toISOString() } : {}) } } : {}),
       };
       batch(() => {
         change((ms) => {
           let out = ms.filter((m) => m.id !== saved);
           if (original) out = patch(original.id, { waitingSince: now() })(out);
           return [...out, sent];
-        }, `${real ? "Sending" : "Sent"} to ${ok.map((c) => c.name).join(", ")}`);
+        }, later ? `Scheduled for ${longDate(later)}` : `${real ? "Sending" : "Sent"} to ${ok.map((c) => c.name).join(", ")}`);
         setDraft({ ...d, id: null, to: "", subject: "", body: "", attachments: [] });
         setComposing(false);
         setPanel(null);
       });
       return true;
+    },
+    /** A scheduled message goes now (after the Undo Send delay, for a real account). */
+    sendNow() {
+      const s = selected();
+      if (s?.folder !== "scheduled" || !s.outbox) return;
+      const real = !accountOf(s.account)?.sample;
+      if (real) change(patch(s.id, { folder: "sent", date: now(), outbox: { replyTo: s.outbox.replyTo } }), `Sending to ${(s.to ?? []).map((c) => c.name).join(", ")}`);
+      else change(patch(s.id, { folder: "sent", date: now(), outbox: undefined }), `Sent to ${(s.to ?? []).map((c) => c.name).join(", ")}`);
+    },
+    /** A scheduled message back to Drafts, unscheduled, to change it. */
+    editScheduled() {
+      const s = selected();
+      if (s?.folder !== "scheduled") return;
+      const back = { ...s, folder: "drafts" as const, outbox: undefined, date: now(), draft: { to: formatContacts(s.to ?? []), replyTo: s.outbox?.replyTo } };
+      batch(() => {
+        change((ms) => ms.map((m) => (m.id === s.id ? back : m)), "Unscheduled: it's in Drafts");
+        compose(back);
+      });
+    },
+    /**
+     * Sample mail that was scheduled and is due: it's sent (a real account's is
+     * sent by src/mail/remote.ts). The app calls this every half minute.
+     */
+    deliverDue(at = now()) {
+      for (const m of messages()) {
+        if (m.folder !== "scheduled" || !m.outbox?.at || !accountOf(m.account)?.sample) continue;
+        if (Date.parse(m.outbox.at) > at.getTime()) continue;
+        patchQuiet(m.id, { folder: "sent", outbox: undefined, date: new Date(m.outbox.at) });
+        setStatus(`Sent the scheduled message to ${(m.to ?? []).map((c) => c.name).join(", ")}`);
+      }
     },
     undo() {
       const prev = history.pop();

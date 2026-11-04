@@ -15,7 +15,8 @@ export function useRealTime() {
   NOW = new Date();
 }
 
-export type Folder = "inbox" | "archive" | "trash" | "sent" | "snoozed" | "drafts";
+/** Where a message is. "scheduled" (Send Later) and "snoozed" are this computer's, not a server's. */
+export type Folder = "inbox" | "archive" | "trash" | "sent" | "snoozed" | "drafts" | "scheduled";
 
 export interface Label {
   id: string;
@@ -97,7 +98,11 @@ export interface Message {
   messageId?: string;
   attachments?: Attachment[];
   /** Written here and waiting to be sent (Undo Send can still take it back), with the message it answers. */
-  outbox?: { replyTo?: number };
+  outbox?: {
+    replyTo?: number;
+    /** Send Later: when it goes (ISO time); without it, after the Undo Send delay. */
+    at?: string;
+  };
 }
 
 /** The conversation a message belongs to. */

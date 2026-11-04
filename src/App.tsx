@@ -1,6 +1,6 @@
 // Mantou Mail: a sidebar of mailboxes and labels, a message list, a reader
 // that shows the whole conversation, and keyboard triage (? lists the keys).
-import { Show, View, createEffect, createSignal, onKey, useUi, type Node } from "mantou-ui";
+import { Show, View, createEffect, createSignal, onCleanup, onKey, useUi, type Node } from "mantou-ui";
 import { LABELS } from "./data";
 import { createMail, usesTabs, type Mail } from "./state";
 import { hline, vline } from "./ui/theme";
@@ -20,6 +20,9 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   const [help, setHelp] = createSignal(false);
   const [accounts, setAccounts] = createSignal(false);
   let searchInput: Node | undefined;
+  // Scheduled sample mail goes when it's due (a real account's is timed by src/mail/remote.ts).
+  const due = setInterval(() => m.deliverDue(), 30_000);
+  onCleanup(() => clearInterval(due));
   createEffect(() => {
     const unread = m.unread({ kind: "all" });
     ui.title(unread ? `Mantou Mail — ${unread} unread` : "Mantou Mail");
