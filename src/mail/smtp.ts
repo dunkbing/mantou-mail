@@ -26,11 +26,13 @@ export interface OutgoingFile {
  * The message as sent: RFC 822 bytes, with In-Reply-To and References when it
  * answers another, whose text it quotes. Written formatting goes in an HTML
  * version too (src/mail/format.ts). Bcc is left out, except in the copy for
- * Sent (`keepBcc`).
+ * Sent (`keepBcc`). `signature` goes after the text.
  */
-export async function compose(m: Message, original?: Message, files: OutgoingFile[] = [], options: { keepBcc?: boolean } = {}): Promise<Buffer> {
+export async function compose(m: Message, original?: Message, files: OutgoingFile[] = [], options: { keepBcc?: boolean; signature?: string } = {}): Promise<Buffer> {
   const refs = original?.messageId ? `<${original.messageId}>` : undefined;
-  const body = m.body.join("\n\n");
+  // The signature follows the usual "-- " line, before what's quoted.
+  const signature = options.signature?.trim();
+  const body = [m.body.join("\n\n"), ...(signature ? [`-- \n${signature}`] : [])].join("\n\n");
   const mail = new MailComposer({
     from: address(m.from),
     to: (m.to ?? []).map(address),

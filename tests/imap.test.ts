@@ -270,6 +270,19 @@ test("reply all over SMTP: Cc in the headers, Bcc only in the envelope (and in S
   expect(sent.body).toEqual(["Tuesday is **great**. Agenda:", "- launch\n- metrics"]); // the quote is folded away when read
 });
 
+test("an account's signature goes under what's sent from it, not into the draft", async () => {
+  const env = await setup();
+  const { mail, server, remote } = env;
+  const a = await addAccount(env);
+  remote.setSignature(a.id, "Best,\nSam");
+  mail.compose();
+  mail.editDraft({ to: "jonas@example.com", subject: "Hello", body: "See you Tuesday." });
+  mail.send();
+  await until(() => server.smtp.received.length === 1, "the message to arrive");
+  expect(server.smtp.received[0].raw).toMatch(/See you Tuesday\.\r?\n\r?\n-- \r?\nBest,\r?\nSam/);
+  expect(mail.messages().find((m) => m.subject === "Hello")!.body).toEqual(["See you Tuesday."]);
+});
+
 test("Undo Send within the window sends nothing, and puts the text back in Drafts", async () => {
   const env = await setup();
   const { mail, server, remote } = env;

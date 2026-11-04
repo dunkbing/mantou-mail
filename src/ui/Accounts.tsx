@@ -81,6 +81,7 @@ function Guide(props: { guide: PasswordGuide; onOpen: (url: string) => void }) {
 function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect: () => void }) {
   const provider = () => (props.account.oauth ? props.remote.providerOf(props.account) : null);
   const status = () => props.remote.statuses()[props.account.id];
+  const [signature, setSignature] = createSignal(props.account.signature ?? "");
   const remove = async () => {
     const yes = await props.remote.confirm({
       title: "Remove account",
@@ -91,7 +92,8 @@ function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect
     if (yes) await props.remote.removeAccount(props.account.id);
   };
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 10, paddingBottom: 10 }}>
+    <View style={{ paddingTop: 10, paddingBottom: 10, gap: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
       <Avatar name={props.account.sender} size={32} />
       <View style={{ flexGrow: 1, flexShrink: 1, gap: 2 }}>
         <Text style={{ fontSize: 14, fontWeight: 600, color: C.text, maxLines: 1 }}>{props.account.email}</Text>
@@ -104,6 +106,14 @@ function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect
         <TextButton label={provider() ? `Sign in with ${provider()!.name}` : "Enter password"} onPress={props.onReconnect} />
       </Show>
       <TextButton label="Remove" onPress={() => void remove()} />
+    </View>
+    <Input
+      multiline
+      value={signature()}
+      placeholder="Signature, added under mail you send from this account"
+      onChange={(v) => (setSignature(v), props.remote.setSignature(props.account.id, v))}
+      style={[field, { minHeight: 34, maxHeight: 90, marginLeft: 44, paddingLeft: 8, paddingTop: 6, paddingBottom: 6, fontSize: 13, borderRadius: 6, borderWidth: 1, borderColor: C.line }]}
+    />
     </View>
   );
 }

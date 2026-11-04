@@ -113,6 +113,18 @@ test("Tab stays in a dialog: it doesn't reach the search field behind it", async
   expect(mail.searching()).toBe(false);
 });
 
+test("an account's signature is typed in Accounts, and kept", async () => {
+  const { h, remote, server } = await app();
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });
+  await remote.syncOf(a.id)!.firstSync;
+  h.step();
+  h.press(text(h, "Manage accounts"));
+  h.step();
+  h.press(inputs(h)[1]); // [0] is search; the account's signature comes first in the dialog
+  h.type("Best, Sam");
+  expect(remote.accounts()[0].signature).toBe("Best, Sam");
+});
+
 test("removing the last account asks first, then brings the sample mail back", async () => {
   const { h, mail, remote, server } = await app();
   const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings, smtp: server.smtp.settings });

@@ -14,6 +14,8 @@ export interface AccountConfig extends Account {
   smtp?: SmtpSettings;
   /** Signs in with this provider (its refresh token is kept in place of a password). */
   oauth?: OAuthProviderId;
+  /** Added under what's written in mail sent from this account (not in drafts). */
+  signature?: string;
 }
 
 const DATES = new Set(["date", "waitingSince"]);

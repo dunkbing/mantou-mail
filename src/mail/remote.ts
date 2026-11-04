@@ -154,9 +154,9 @@ export class Remote {
     try {
       const files = await Promise.all((m.attachments ?? []).map(async (a) => ({ name: a.name, type: a.type, content: await this.bytesOf(a) })));
       const out = { ...m, date: now() };
-      raw = await compose(out, original, files);
+      raw = await compose(out, original, files, { signature: cfg.signature });
       // The copy filed in Sent keeps the Bcc line, so you can see who got it.
-      sentCopy = m.bcc?.length ? await compose(out, original, files, { keepBcc: true }) : raw;
+      sentCopy = m.bcc?.length ? await compose(out, original, files, { keepBcc: true, signature: cfg.signature }) : raw;
       await sendSmtp(smtp, login, m, raw);
     } catch (e) {
       return fail((e as Error).message);
@@ -431,6 +431,7 @@ export class Remote {
       imap: n.imap,
       smtp,
       ...(n.oauth ? { oauth: n.oauth.provider } : {}),
+      ...(existing?.signature ? { signature: existing.signature } : {}),
     };
     this.store.saveAccount(cfg);
     this.listSignal[1](this.accounts());
@@ -440,6 +441,15 @@ export class Remote {
     this.mail?.setAccounts(this.accounts(), this.store.messages());
     this.start(cfg);
     return cfg;
+  }
+
+  /** Sets what's added under mail sent from an account (empty: nothing). */
+  setSignature(id: string, signature: string) {
+    const cfg = this.accounts().find((a) => a.id === id);
+    if (!cfg) return;
+    const { signature: _, ...rest } = cfg;
+    // Not the account list's signal: the Accounts dialog's rows would be remade at each key.
+    this.store.saveAccount(signature.trim() ? { ...rest, signature } : rest);
   }
 
   /** Forgets an account: its settings, password and saved mail (nothing changes on the server). */
