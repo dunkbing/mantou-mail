@@ -1,19 +1,22 @@
 // The toolbar over the list and reader: tabs or the mailbox's name, and actions.
-import { Show, Text, View } from "mantou-ui";
+import { Show, Text, View, useWindowSize } from "mantou-ui";
 import { isFiledAway, usesTabs, type Mail, type Tab } from "../state";
 import { C } from "./theme";
 import { Chip } from "./common";
 import { Icon, type IconName } from "./icons";
 
-export function ToolButton(props: { label: string; icon: IconName; hint: string; onPress: () => void; disabled?: boolean; active?: boolean }) {
+/** A toolbar action: icon, name and key; in a narrow window, the icon only. */
+export function ToolButton(props: { label: string; icon: IconName; hint: string; onPress: () => void; disabled?: boolean; active?: boolean; compact?: boolean }) {
   return (
     <View
-      style={{ flexDirection: "row", alignItems: "center", flexShrink: 0, gap: 6, height: 30, paddingLeft: 10, paddingRight: 10, borderRadius: 6, borderWidth: 1, borderColor: props.active ? C.accent : C.line, backgroundColor: props.active ? C.accentSoft : "#ffffff", opacity: props.disabled ? 0.45 : 1 }}
+      style={{ flexDirection: "row", alignItems: "center", flexShrink: 0, gap: 6, height: 30, paddingLeft: props.compact ? 8 : 10, paddingRight: props.compact ? 8 : 10, borderRadius: 6, borderWidth: 1, borderColor: props.active ? C.accent : C.line, backgroundColor: props.active ? C.accentSoft : "#ffffff", opacity: props.disabled ? 0.45 : 1 }}
       onPress={() => !props.disabled && props.onPress()}
     >
       <Icon name={props.icon} size={15} color={props.active ? C.accent : C.secondary} />
-      <Text style={{ fontSize: 13, fontWeight: 500, color: props.active ? C.accent : C.text }}>{props.label}</Text>
-      <Text style={{ fontSize: 11, color: C.muted }}>{props.hint}</Text>
+      <Show when={!props.compact}>
+        <Text style={{ fontSize: 13, fontWeight: 500, color: props.active ? C.accent : C.text }}>{props.label}</Text>
+        <Text style={{ fontSize: 11, color: C.muted }}>{props.hint}</Text>
+      </Show>
     </View>
   );
 }
@@ -37,6 +40,9 @@ export function Toolbar(props: { mail: Mail }) {
   const m = props.mail;
   const none = () => !m.selected();
   const filed = () => !!m.selected() && isFiledAway(m.selected()!);
+  // Names and keys fit from 1,200 px wide; below that, icons (the keys are in ?).
+  const size = useWindowSize();
+  const compact = () => size().width > 0 && size().width < 1200;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", height: 52, flexShrink: 0, paddingLeft: 20, paddingRight: 16, gap: 18 }}>
       <Show when={usesTabs(m.mailbox())} fallback={<Text style={{ flexShrink: 1, fontSize: 15, fontWeight: 600, color: C.text, maxLines: 1 }}>{m.mailboxName(m.mailbox())}</Text>}>
@@ -49,17 +55,17 @@ export function Toolbar(props: { mail: Mail }) {
           when={filed()}
           fallback={
             <>
-              <ToolButton label="Archive" icon="archive" hint="E" onPress={m.archive} disabled={none()} />
-              <ToolButton label="Snooze" icon="clock" hint="H" onPress={() => m.togglePanel("snooze")} disabled={none()} active={m.panel() === "snooze"} />
+              <ToolButton label="Archive" icon="archive" hint="E" onPress={m.archive} disabled={none()} compact={compact()} />
+              <ToolButton label="Snooze" icon="clock" hint="H" onPress={() => m.togglePanel("snooze")} disabled={none()} active={m.panel() === "snooze"} compact={compact()} />
             </>
           }
         >
-          <ToolButton label="Move to Inbox" icon="inbox" hint="I" onPress={m.moveToInbox} />
+          <ToolButton label="Move to Inbox" icon="inbox" hint="I" onPress={m.moveToInbox} compact={compact()} />
         </Show>
-        <ToolButton label="Label" icon="tag" hint="L" onPress={() => m.togglePanel("labels")} disabled={none()} active={m.panel() === "labels"} />
-        <ToolButton label="Reply" icon="reply" hint="R" onPress={() => m.toggleReply()} disabled={none()} active={m.panel() === "reply"} />
-        <ToolButton label="Forward" icon="forward" hint="F" onPress={m.forward} disabled={none()} />
-        <ToolButton label={m.selected()?.folder === "trash" ? "Delete forever" : "Delete"} icon="trash" hint="#" onPress={m.remove} disabled={none()} />
+        <ToolButton label="Label" icon="tag" hint="L" onPress={() => m.togglePanel("labels")} disabled={none()} active={m.panel() === "labels"} compact={compact()} />
+        <ToolButton label="Reply" icon="reply" hint="R" onPress={() => m.toggleReply()} disabled={none()} active={m.panel() === "reply"} compact={compact()} />
+        <ToolButton label="Forward" icon="forward" hint="F" onPress={m.forward} disabled={none()} compact={compact()} />
+        <ToolButton label={m.selected()?.folder === "trash" ? "Delete forever" : "Delete"} icon="trash" hint="#" onPress={m.remove} disabled={none()} compact={compact()} />
       </View>
     </View>
   );

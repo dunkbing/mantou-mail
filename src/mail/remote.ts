@@ -11,8 +11,9 @@ import type { MessageOptions } from "mantou-ui";
 import { confirm, downloadsDir, freeName, hasDialogs, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
 import { AccountSync, checkLogin, type Login, type SyncStatus } from "./imap";
-import { guessSettings, guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
-import { OAuthError, google, oauthFor, refresh, signIn, type OAuthProvider, type OAuthProviderId, type Tokens } from "./oauth";
+import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
+import { OAuthError, appProviders, hostOfMx, oauthFor, refresh, signIn, type OAuthProvider, type OAuthProviderId, type Providers, type Tokens } from "./oauth";
+import { resolveMx } from "node:dns/promises";
 import { checkSmtp, compose, send as sendSmtp } from "./smtp";
 import type { Secrets } from "./secrets";
 import type { AccountConfig, Store } from "./store";
@@ -61,7 +62,9 @@ export class Remote {
       /** Whether the system's dialogs can be shown (default: a guess, see hasDialogs). */
       dialogs?: boolean;
       /** The providers accounts can sign in with (default: the app's, see oauth.ts), and what opens their sign-in page (default: the system's browser). */
-      oauth?: { google?: OAuthProvider | null };
+      oauth?: Providers;
+      /** A domain's MX hosts (default: DNS), to tell a company on Google Workspace or Microsoft 365. */
+      mx?: (domain: string) => Promise<string[]>;
       openUrl?: (url: string) => void | Promise<void>;
     } = {},) {
     this.lastId = store.maxId();
@@ -241,13 +244,38 @@ export class Remote {
   /** Access tokens of accounts that sign in with a provider, by account id (in memory only). */
   private tokens = new Map<string, Tokens>();
 
-  private providers() {
-    return this.options.oauth ?? { google: google() };
+  private providers(): Providers {
+    return this.options.oauth ?? appProviders();
   }
+  /** Opens a web page in the system's browser (a provider's app password page). */
+  openLink(url: string) {
+    void (this.options.openUrl ?? openWithSystem)(url);
+  }
+
+  /** Who hosts each domain's mail, by its MX records, once looked up (hostedBy). */
+  private hosts = new Map<string, OAuthProviderId | null>();
+  private readonly hostsSignal = createSignal(0);
   /** The provider an account signs in with, configured or guessed from its address (null: it uses a password). */
   providerOf(account: { oauth?: OAuthProviderId; email: string }): OAuthProvider | null {
     if (account.oauth) return this.providers()[account.oauth] ?? null;
-    return oauthFor(account.email, this.providers());
+    this.hostsSignal[0](); // a lookup that finishes later changes the answer
+    const domain = account.email.trim().toLowerCase().split("@")[1] ?? "";
+    return oauthFor(account.email, this.providers(), this.hosts.get(domain) ?? undefined);
+  }
+  /**
+   * Looks up who hosts an address's mail (its domain's MX records), so a
+   * company address on Google Workspace or Microsoft 365 signs in too.
+   * providerOf follows when it's done; failures count as "no one".
+   */
+  async lookUpHost(email: string): Promise<OAuthProviderId | null> {
+    const domain = email.trim().toLowerCase().split("@")[1] ?? "";
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return null;
+    if (this.hosts.has(domain)) return this.hosts.get(domain)!;
+    const mx = this.options.mx ?? (async (d: string) => (await resolveMx(d)).map((r) => r.exchange));
+    const host = hostOfMx(await mx(domain).catch(() => [])) ?? null;
+    this.hosts.set(domain, host);
+    this.hostsSignal[1](this.hostsSignal[0]() + 1);
+    return host;
   }
 
   /**
@@ -279,17 +307,20 @@ export class Remote {
    * (or, already added, renews its sign-in). `signal` cancels the wait.
    */
   async signInAndAdd(email: string, opts: { sender?: string; signal?: AbortSignal; imap?: ImapSettings; smtp?: SmtpSettings } = {}): Promise<AccountConfig> {
-    const p = this.providerOf({ email });
+    const existing = this.accounts().find((a) => a.id === email.trim().toLowerCase());
+    if (!existing?.oauth) await this.lookUpHost(email);
+    const p = this.providerOf({ email, oauth: existing?.oauth });
     if (!p) throw new Error(`Mantou Mail can't sign in to ${email} with its provider; use a password`);
     const got = await signIn(p, { loginHint: email.trim() || undefined, open: this.options.openUrl, signal: opts.signal });
     const wanted = email.trim().toLowerCase();
     if (wanted && got.email.toLowerCase() !== wanted) throw new Error(`You signed in as ${got.email}, not ${email.trim()}`);
-    const existing = this.accounts().find((a) => a.id === got.email.toLowerCase());
+    const had = this.accounts().find((a) => a.id === got.email.toLowerCase());
     return this.addAccount({
       email: got.email,
       oauth: { provider: p.id, tokens: got },
-      imap: opts.imap ?? existing?.imap ?? guessSettings(got.email),
-      smtp: opts.smtp ?? existing?.smtp,
+      // The provider's servers, with the address as the login (an account signing in again keeps its own).
+      imap: opts.imap ?? had?.imap ?? { ...p.imap, user: got.email },
+      smtp: opts.smtp ?? had?.smtp ?? { ...p.smtp, user: got.email },
       sender: opts.sender,
     });
   }

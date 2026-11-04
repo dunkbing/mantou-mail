@@ -114,8 +114,9 @@ export function EmptyList(props: { mail: Mail }) {
 /**
  * Rows are rendered a page at a time, more as the scroll nears the end of
  * what's rendered (and always as far as the selection). Workaround for
- * dunkbing/mantou#19 (a virtualized List): rendering every row of a big
- * mailbox costs about 8 nodes and 53 ops a row.
+ * dunkbing/mantou#31: Mantou's <List> virtualizes rows of one height, and
+ * these rows' heights vary (chips). Rendering every row of a big mailbox costs
+ * about 8 nodes and 53 ops a row.
  */
 export const PAGE = 60;
 

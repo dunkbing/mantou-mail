@@ -33,4 +33,4 @@ Attachments and Forward (4 November) added about 8 nodes and 3% more ops at moun
 
 ## What's Mantou's
 
-- **[dunkbing/mantou#19](https://github.com/dunkbing/mantou/issues/19)** (a virtualised list): until it ships, the list renders 60 rows at a time; every rendered row is about 8 nodes and 53 ops. Fixed in 0.1.3: [#9](https://github.com/dunkbing/mantou/issues/9) (text laid out for every node, and the cache past 4,096) and [#5](https://github.com/dunkbing/mantou/issues/5) (scrolling re-laid out the content).
+- **[dunkbing/mantou#31](https://github.com/dunkbing/mantou/issues/31)** (a virtualized list with rows of different heights; 0.1.5's `<List>`, [#19](https://github.com/dunkbing/mantou/issues/19), takes rows of one height): until then, the list renders 60 rows at a time; every rendered row is about 8 nodes and 53 ops. Fixed in 0.1.3: [#9](https://github.com/dunkbing/mantou/issues/9) (text laid out for every node, and the cache past 4,096) and [#5](https://github.com/dunkbing/mantou/issues/5) (scrolling re-laid out the content).

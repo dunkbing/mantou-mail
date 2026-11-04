@@ -54,5 +54,9 @@ test("IMAP settings are guessed from the address", () => {
   expect(guessSettings("sam@hotmail.co.uk").host).toBe("outlook.office365.com");
   expect(guessSettings("sam@me.com").host).toBe("imap.mail.me.com");
   expect(guessSettings("sam@northwind.dev").host).toBe("imap.northwind.dev");
-  expect(providerFor("sam@fastmail.com")?.passwordHint).toMatch(/app password/);
+  expect(providerFor("sam@fastmail.com")?.guide?.why).toMatch(/app password/);
+  // (Not toMatchObject with expect.stringContaining in an array: Bun 1.4.4 writes the matchers over the strings it checks.)
+  const icloud = providerFor("sam@icloud.com")!.guide!;
+  expect(icloud.url).toBe("https://account.apple.com/account/manage");
+  expect(icloud.steps.join(" | ")).toMatch(/Apple Account.*\| .*App-Specific Passwords.*\| .*Mantou Mail/);
 });

@@ -4,7 +4,7 @@ import hoodiecrow from "hoodiecrow-imap";
 import { ImapFlow } from "imapflow";
 import { SMTPServer } from "smtp-server";
 import type { ImapSettings } from "../src/mail/providers";
-import type { OAuthProvider } from "../src/mail/oauth";
+import { google, microsoft, type OAuthProvider } from "../src/mail/oauth";
 
 export interface Mail {
   from: string;
@@ -164,16 +164,19 @@ export async function smtpServer(password = "testpass", token = { current: "" })
  * page answers at once for `email` (or is refused), the token endpoint checks
  * the PKCE verifier, and every access token it issues goes to `onToken` (the
  * IMAP and SMTP servers' setAccessToken). `browser` is what opens the page.
+ * As Microsoft, its ID tokens name the account in preferred_username only,
+ * and every refresh hands out a new refresh token (the old one stops working).
  */
-export function oauthServer(opts: { email: string; onToken: (t: string) => void; expiresIn?: number }) {
+export function oauthServer(opts: { email: string; onToken: (t: string) => void; expiresIn?: number; as?: "google" | "microsoft" }) {
+  const ms = opts.as === "microsoft";
   const codes = new Map<string, { challenge: string; redirect: string; clientId: string }>();
-  const state = { deny: false, revoked: false, issued: 0, refreshes: 0, lastAuth: null as URLSearchParams | null };
+  const state = { deny: false, revoked: false, issued: 0, refreshes: 0, refreshToken: "refresh-1", lastAuth: null as URLSearchParams | null, lastToken: null as URLSearchParams | null };
   const issue = () => {
     const t = `access-${++state.issued}`;
     opts.onToken(t);
     return t;
   };
-  const idToken = (email: string) => `x.${Buffer.from(JSON.stringify({ email })).toString("base64url")}.x`;
+  const idToken = (email: string) => `x.${Buffer.from(JSON.stringify(ms ? { preferred_username: email } : { email })).toString("base64url")}.x`;
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -192,7 +195,7 @@ export function oauthServer(opts: { email: string; onToken: (t: string) => void;
         return Response.redirect(back.toString(), 302);
       }
       if (u.pathname === "/token") {
-        const f = new URLSearchParams(await req.text());
+        const f = (state.lastToken = new URLSearchParams(await req.text()));
         const bad = (error: string) => Response.json({ error, error_description: error }, { status: 400 });
         if (f.get("grant_type") === "authorization_code") {
           const c = codes.get(f.get("code") ?? "");
@@ -200,12 +203,13 @@ export function oauthServer(opts: { email: string; onToken: (t: string) => void;
           const hash = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(f.get("code_verifier") ?? ""))).toString("base64url");
           if (!c || c.redirect !== f.get("redirect_uri") || c.clientId !== f.get("client_id") || hash !== c.challenge) return bad("invalid_grant");
           state.revoked = false;
-          return Response.json({ access_token: issue(), refresh_token: "refresh-1", expires_in: opts.expiresIn ?? 3600, id_token: idToken(opts.email) });
+          return Response.json({ access_token: issue(), refresh_token: state.refreshToken, expires_in: opts.expiresIn ?? 3600, id_token: idToken(opts.email) });
         }
         if (f.get("grant_type") === "refresh_token") {
           state.refreshes++;
-          if (state.revoked || f.get("refresh_token") !== "refresh-1") return bad("invalid_grant");
-          return Response.json({ access_token: issue(), expires_in: opts.expiresIn ?? 3600 });
+          if (state.revoked || f.get("refresh_token") !== state.refreshToken) return bad("invalid_grant");
+          if (ms) state.refreshToken = `refresh-${state.refreshes + 1}`;
+          return Response.json({ access_token: issue(), expires_in: opts.expiresIn ?? 3600, ...(ms ? { refresh_token: state.refreshToken } : {}) });
         }
         return bad("unsupported_grant_type");
       }
@@ -213,7 +217,9 @@ export function oauthServer(opts: { email: string; onToken: (t: string) => void;
     },
   });
   const base = `http://127.0.0.1:${server.port}`;
-  const provider: OAuthProvider = { id: "google", name: "Google", authUrl: `${base}/auth`, tokenUrl: `${base}/token`, scopes: ["https://mail.google.com/", "openid", "email"], clientId: "test-client", authParams: { access_type: "offline", prompt: "consent" } };
+  // The app's own settings for the provider, pointed here.
+  const real = (ms ? microsoft({ MANTOU_MAIL_MICROSOFT_CLIENT_ID: "test-client" }) : google({ MANTOU_MAIL_GOOGLE_CLIENT_ID: "test-client" }))!;
+  const provider: OAuthProvider = { ...real, authUrl: `${base}/auth`, tokenUrl: `${base}/token` };
   return {
     provider,
     state,

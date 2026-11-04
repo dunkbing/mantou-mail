@@ -1,13 +1,15 @@
-// Signing in with a provider (OAuth 2.0) instead of a password: Gmail now, and
-// Outlook next, which no longer takes passwords at all. The flow is the one for
+// Signing in with a provider (OAuth 2.0) instead of a password: Google (Gmail,
+// Google Workspace) and Microsoft (Outlook.com, Microsoft 365, which no longer
+// take passwords from mail apps at all). The flow is the one for
 // desktop apps (RFC 8252): the system's browser opens the provider's sign-in
 // page, which sends the browser back to a port on this machine with a code;
 // the code and a secret made for this sign-in (PKCE) buy a refresh token, kept
 // in the keychain like a password, and short-lived access tokens, which IMAP
 // and SMTP take instead of the password (XOAUTH2).
 import { openWithSystem } from "./files";
+import type { ImapSettings, SmtpSettings } from "./providers";
 
-export type OAuthProviderId = "google";
+export type OAuthProviderId = "google" | "microsoft";
 
 export interface OAuthProvider {
   id: OAuthProviderId;
@@ -21,18 +23,29 @@ export interface OAuthProvider {
   clientSecret?: string;
   /** More parameters for the sign-in page. */
   authParams?: Record<string, string>;
+  /** The token endpoint wants the scopes again (Microsoft's does). */
+  tokenScopes?: boolean;
+  /** Its mail servers take no passwords at all, app passwords included (Microsoft's). */
+  noPasswords?: boolean;
+  /** The provider's mail servers, for an account signed in with it (the login is the address). */
+  imap: Omit<ImapSettings, "user">;
+  smtp: Omit<SmtpSettings, "user">;
 }
 
 /**
  * The app's OAuth clients, as registered with each provider (docs/oauth.md).
- * Desktop clients' ids ship with the app; MANTOU_MAIL_GOOGLE_CLIENT_ID and
- * MANTOU_MAIL_GOOGLE_CLIENT_SECRET override them (for your own client).
+ * Desktop clients' ids ship with the app; MANTOU_MAIL_GOOGLE_CLIENT_ID,
+ * MANTOU_MAIL_GOOGLE_CLIENT_SECRET and MANTOU_MAIL_MICROSOFT_CLIENT_ID
+ * override them (for your own clients).
  */
 const GOOGLE_CLIENT_ID = "";
 const GOOGLE_CLIENT_SECRET = "";
+const MICROSOFT_CLIENT_ID = "";
+
+type Env = Record<string, string | undefined>;
 
 /** Google's settings, or null when the app has no client id for it. */
-export function google(env: Record<string, string | undefined> = process.env): OAuthProvider | null {
+export function google(env: Env = process.env): OAuthProvider | null {
   const clientId = env.MANTOU_MAIL_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
   if (!clientId) return null;
   return {
@@ -46,14 +59,61 @@ export function google(env: Record<string, string | undefined> = process.env): O
     clientSecret: env.MANTOU_MAIL_GOOGLE_CLIENT_SECRET || GOOGLE_CLIENT_SECRET || undefined,
     // A refresh token, asked for again on every sign-in (Google only sends one on consent).
     authParams: { access_type: "offline", prompt: "consent" },
+    imap: { host: "imap.gmail.com", port: 993, secure: true },
+    smtp: { host: "smtp.gmail.com", port: 465, secure: true },
   };
 }
 
-/** The provider an address signs in with, if the app has one for it. */
-export function oauthFor(email: string, providers: { google?: OAuthProvider | null } = { google: google() }): OAuthProvider | null {
+/**
+ * Microsoft's settings (personal accounts and work or school ones: the
+ * "common" endpoints), or null when the app has no client id for it. A
+ * public client: PKCE, no secret.
+ */
+export function microsoft(env: Env = process.env): OAuthProvider | null {
+  const clientId = env.MANTOU_MAIL_MICROSOFT_CLIENT_ID || MICROSOFT_CLIENT_ID;
+  if (!clientId) return null;
+  return {
+    id: "microsoft",
+    name: "Microsoft",
+    authUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    // IMAP and SMTP for the signed-in mailbox; offline_access for a refresh token; openid and email say whose it is.
+    scopes: ["https://outlook.office.com/IMAP.AccessAsUser.All", "https://outlook.office.com/SMTP.Send", "offline_access", "openid", "email"],
+    clientId,
+    authParams: { prompt: "select_account" },
+    tokenScopes: true,
+    noPasswords: true,
+    imap: { host: "outlook.office365.com", port: 993, secure: true },
+    smtp: { host: "smtp.office365.com", port: 587, secure: false },
+  };
+}
+
+export type Providers = Partial<Record<OAuthProviderId, OAuthProvider | null>>;
+
+/** The app's providers: those it has a client id for. */
+export const appProviders = (env: Env = process.env): Providers => ({ google: google(env), microsoft: microsoft(env) });
+
+const GOOGLE_DOMAINS = /^(gmail|googlemail)\.com$/;
+const MICROSOFT_DOMAINS = /^(outlook|hotmail|live|msn)\.[a-z.]+$/;
+
+/** Who hosts a domain's mail, from its MX hosts: Google Workspace and Microsoft 365 are the ones that sign in. */
+export function hostOfMx(exchanges: string[]): OAuthProviderId | undefined {
+  for (const x of exchanges.map((e) => e.toLowerCase().replace(/\.$/, ""))) {
+    if (/(^|\.)(google|googlemail)\.com$/.test(x)) return "google";
+    if (/\.mail\.protection\.outlook\.com$/.test(x) || /(^|\.)outlook\.com$/.test(x)) return "microsoft";
+  }
+  return undefined;
+}
+
+/**
+ * The provider an address signs in with, if the app has one for it: by its
+ * domain (gmail.com, outlook.com…), else by who hosts the domain's mail
+ * (`hostedBy`, from its MX records: a company on Google Workspace or Microsoft 365).
+ */
+export function oauthFor(email: string, providers: Providers = appProviders(), hostedBy?: OAuthProviderId): OAuthProvider | null {
   const domain = email.trim().toLowerCase().split("@")[1] ?? "";
-  if (/^(gmail|googlemail)\.com$/.test(domain)) return providers.google ?? null;
-  return null;
+  const id: OAuthProviderId | undefined = GOOGLE_DOMAINS.test(domain) ? "google" : MICROSOFT_DOMAINS.test(domain) ? "microsoft" : hostedBy;
+  return id ? (providers[id] ?? null) : null;
 }
 
 export interface Tokens {
@@ -80,17 +140,23 @@ export class OAuthError extends Error {
 const base64url = (b: Uint8Array) => Buffer.from(b).toString("base64url");
 const random = (n = 32) => base64url(crypto.getRandomValues(new Uint8Array(n)));
 
-/** The email in an ID token (it comes straight from the token endpoint over TLS, so it isn't verified again here). */
+/**
+ * The address in an ID token (it comes straight from the token endpoint over
+ * TLS, so it isn't verified again here): `email`, or Microsoft's
+ * `preferred_username` (the sign-in name, an address for mail accounts).
+ */
 function emailOf(idToken: string | undefined): string | undefined {
   try {
-    return JSON.parse(Buffer.from(idToken!.split(".")[1], "base64url").toString()).email;
+    const claims = JSON.parse(Buffer.from(idToken!.split(".")[1], "base64url").toString());
+    const name = claims.email ?? claims.preferred_username;
+    return typeof name === "string" && name.includes("@") ? name : undefined;
   } catch {
     return undefined;
   }
 }
 
 async function tokenRequest(p: OAuthProvider, params: Record<string, string>): Promise<Record<string, unknown>> {
-  const body = new URLSearchParams({ client_id: p.clientId, ...(p.clientSecret ? { client_secret: p.clientSecret } : {}), ...params });
+  const body = new URLSearchParams({ client_id: p.clientId, ...(p.clientSecret ? { client_secret: p.clientSecret } : {}), ...(p.tokenScopes ? { scope: p.scopes.join(" ") } : {}), ...params });
   let res: Response;
   try {
     res = await fetch(p.tokenUrl, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" }, body });
@@ -100,7 +166,8 @@ async function tokenRequest(p: OAuthProvider, params: Record<string, string>): P
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     const error = String(json.error ?? res.status);
-    throw new OAuthError(`${p.name} said no: ${json.error_description ?? error}`, error === "invalid_grant");
+    // invalid_grant: revoked or expired; interaction_required: Microsoft wants the person back (a new policy, a password change).
+    throw new OAuthError(`${p.name} said no: ${String(json.error_description ?? error).split(/\r?\n/)[0]}`, error === "invalid_grant" || error === "interaction_required");
   }
   return json;
 }
@@ -146,7 +213,8 @@ export async function signIn(
       return new Response(PAGE("Signed in", "You can close this tab and go back to Mantou Mail."), { headers: { "content-type": "text/html; charset=utf-8" } });
     },
   });
-  const redirectUri = `http://127.0.0.1:${server.port}/`;
+  // Registered as http://127.0.0.1 (any port: RFC 8252 section 7.3; Microsoft ignores the port of a loopback address too).
+  const redirectUri = `http://127.0.0.1:${server.port}`;
   const url = new URL(p.authUrl);
   for (const [k, v] of Object.entries({
     client_id: p.clientId,

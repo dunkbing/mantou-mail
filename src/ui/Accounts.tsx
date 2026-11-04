@@ -1,13 +1,14 @@
 // The Accounts dialog: the real accounts and how their sync is going, and the
 // form that adds one (or asks for a password again). Addresses whose provider
 // signs in with OAuth (Gmail) get "Sign in with Google" instead of a password.
-import { For, Input, Show, Text, View, createSignal, onMount, type JSX, type Node } from "mantou-ui";
+import { For, Input, Show, Text, View, createSignal, onCleanup, onMount, type JSX, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
-import { guessSettings, guessSmtp, providerFor, type ImapSettings, type SmtpSettings } from "../mail/providers";
+import { GENERIC_GUIDE, guessSettings, guessSmtp, providerFor, type ImapSettings, type PasswordGuide, type SmtpSettings } from "../mail/providers";
 import type { AccountConfig } from "../mail/store";
 import type { SyncState } from "../mail/imap";
 import { C, caption, field, hline, small, dialogShadow } from "./theme";
 import { Avatar, Kbd, SendButton, TextButton } from "./common";
+import { Icon } from "./icons";
 
 export const STATE_COLOR: Record<SyncState, string> = {
   connecting: "#f59e0b",
@@ -49,6 +50,31 @@ function TextField(props: { value: string; onChange: (v: string) => void; placeh
       onBlur={() => setFocused(false)}
       style={[field, box(focused()), props.width ? { width: props.width, flexShrink: 0 } : { flexGrow: 1, flexBasis: 0 }, props.readOnly ? { color: C.secondary } : {}]}
     />
+  );
+}
+
+/** How to get an app password: why, the steps, and a button that opens the provider's page. */
+function Guide(props: { guide: PasswordGuide; onOpen: (url: string) => void }) {
+  return (
+    <View style={{ gap: 6, padding: 12, marginBottom: 8, borderRadius: 8, backgroundColor: C.faint }}>
+      <Text style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: C.text }}>{props.guide.why}</Text>
+      <For each={props.guide.steps}>
+        {(step, i) => (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Text style={[small, { width: 14, flexShrink: 0, fontWeight: 600, color: C.secondary }]}>{`${i() + 1}.`}</Text>
+            <Text style={[small, { flexShrink: 1, lineHeight: 1.45, color: C.secondary }]}>{step}</Text>
+          </View>
+        )}
+      </For>
+      <Show when={props.guide.url}>
+        <View style={{ flexDirection: "row" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 7, borderWidth: 1, borderColor: C.line, backgroundColor: "#ffffff" }} onPress={() => props.onOpen(props.guide.url!)}>
+            <Icon name="open" size={13} color={C.accent} />
+            <Text style={{ fontSize: 12, fontWeight: 500, color: C.accent }}>{`Open ${props.guide.page ?? "the page"}`}</Text>
+          </View>
+        </View>
+      </Show>
+    </View>
   );
 }
 
@@ -100,12 +126,27 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
   /** Cancels the sign-in waiting in the browser. */
   const [signingIn, setSigningIn] = createSignal<AbortController | null>(null);
   const oauth = () => (usePassword() ? null : r.providerOf({ email: email() }));
+  /** What signs in, and what takes a password, before an address is typed. */
+  const intro = () => {
+    const g = r.providerOf({ email: "a@gmail.com" }), m = r.providerOf({ email: "a@outlook.com" });
+    const signs = [g && "Gmail and Google Workspace sign in with Google", m && "Outlook and Microsoft 365 sign in with Microsoft"].filter(Boolean).join("; ");
+    return `${signs ? `${signs}. ` : ""}Most providers take an app password over IMAP: once you type your address, this shows how to get one.`;
+  };
+  /** The server refused the password just now. */
+  const refused = () => /didn't accept the password/.test(error());
+  /** How to get an app password: the provider's own steps, or general ones once a password was refused. */
+  const guide = () => (oauth() ? null : (providerFor(email())?.guide ?? (refused() ? GENERIC_GUIDE : null)));
   let passwordInput: Node | undefined;
+  let lookup: ReturnType<typeof setTimeout> | undefined;
   onMount(() => void r.secrets.persistent().then(setKeychain));
+  onCleanup(() => clearTimeout(lookup));
 
   const editEmail = (v: string) => {
     setEmail(v);
     setError("");
+    // A company address may be on Google Workspace or Microsoft 365: its MX records say, once it's typed.
+    clearTimeout(lookup);
+    if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v.trim()) && !providerFor(v)) lookup = setTimeout(() => void r.lookUpHost(v), 400);
     if (!custom()) {
       setServer(guessSettings(v));
       setSmtp(guessSmtp(v));
@@ -198,11 +239,18 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
         </Show>
         <View style={{ paddingLeft: 24, paddingRight: 24, paddingTop: 18, paddingBottom: 8, gap: 4 }}>
           <Text style={caption}>{reconnecting() ? `PASSWORD FOR ${reconnecting()!.toUpperCase()}` : oauth() ? `ADD A ${oauth()!.name.toUpperCase()} ACCOUNT` : "ADD AN IMAP ACCOUNT"}</Text>
-          <Text style={[small, { lineHeight: 1.5, paddingBottom: 8 }]}>
-            {oauth()
-              ? `Your browser opens ${oauth()!.name}'s sign-in page. Mantou Mail never sees your password; it keeps a sign-in in the system keychain, which you can revoke from your ${oauth()!.name} account.`
-              : (providerFor(email())?.passwordHint ?? "iCloud, Fastmail, Yahoo and most other providers work over IMAP; many need an app password for it.")}
-          </Text>
+          <Show
+            when={guide()}
+            fallback={
+              <Text style={[small, { lineHeight: 1.5, paddingBottom: 8 }]}>
+                {oauth()
+                  ? `Your browser opens ${oauth()!.name}'s sign-in page. Mantou Mail never sees your password; it keeps a sign-in in the system keychain, which you can revoke from your ${oauth()!.name} account.`
+                  : intro()}
+              </Text>
+            }
+          >
+            <Guide guide={guide()!} onOpen={(url) => r.openLink(url)} />
+          </Show>
           <Field label="Email">
             <TextField autoFocus value={email()} onChange={editEmail} placeholder="you@example.com" readOnly={!!reconnecting() || !!signingIn()} onSubmit={() => (oauth() ? void signIn() : passwordInput?.focus())} />
           </Field>
@@ -241,7 +289,7 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
             fallback={<SendButton label={busy() ? "Connecting…" : "Connect"} keys="Enter" onPress={() => void connect()} />}
           >
             <SendButton label={signingIn() ? "Waiting for the browser…" : `Sign in with ${oauth()?.name ?? "Google"}`} keys="Enter" onPress={() => void signIn()} />
-            <Show when={signingIn()} fallback={<TextButton label="Use an app password" onPress={() => (setUsePassword(true), setError(""))} />}>
+            <Show when={signingIn()} fallback={<Show when={!oauth()?.noPasswords}><TextButton label="Use an app password" onPress={() => (setUsePassword(true), setError(""))} /></Show>}>
               <TextButton label="Cancel" onPress={() => signingIn()?.abort()} />
             </Show>
           </Show>

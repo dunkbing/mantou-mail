@@ -20,7 +20,7 @@ bun install
 bun run dev
 ```
 
-Add an account with "Add your account" in the sidebar. Gmail can sign in with Google once the app has a client ID ([docs/oauth.md](docs/oauth.md)); otherwise it takes an app password. Outlook doesn't work yet: Microsoft only allows signing in with Microsoft, which is next.
+Add an account with "Add your account" in the sidebar. Gmail and Outlook (and Google Workspace and Microsoft 365) sign in with Google or Microsoft once the app has client IDs ([docs/oauth.md](docs/oauth.md)); other providers take an app password, and the dialog shows how to get one.
 
 To try it without a real account, start a local IMAP and SMTP server with the sample mail, then add `sam@northwind.dev`, password `testpass`, servers `127.0.0.1` (IMAP port 1143, SMTP port 1025), username `testuser`:
 

@@ -82,6 +82,7 @@ test("the Accounts dialog adds an IMAP account; its mail replaces the sample mai
   expect(texts(h)).toContain("STARTTLS");
   h.press(text(h, "Connect"));
   await until(() => texts(h).some((t) => t.startsWith("The server didn't accept the password")), "the login to fail", () => h.step());
+  expect(texts(h)).toContain("If your account has 2-step verification, it most likely needs an app password for mail apps, not your usual one."); // the general guide
   expect(mail.accounts()[0].sample).toBe(true); // nothing was added
 
   retype(h, password, "testpass");
@@ -283,7 +284,8 @@ test("a Gmail address signs in with Google in the browser; an app password is st
 test("without a Google client id, a Gmail address uses an app password", async () => {
   const store = new Store(":memory:");
   cleanup.push(() => store.close());
-  const remote = new Remote(store, memorySecrets(), { oauth: { google: null } });
+  const opened: string[] = [];
+  const remote = new Remote(store, memorySecrets(), { oauth: { google: null, microsoft: null }, openUrl: (u) => void opened.push(u) });
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -295,5 +297,40 @@ test("without a Google client id, a Gmail address uses an app password", async (
   h.press(text(h, "Add your account"));
   h.type("sam.rivera@gmail.com");
   expect(texts(h)).toContain("ADD AN IMAP ACCOUNT");
-  expect(texts(h).some((t) => t.startsWith("Gmail over IMAP needs an app password"))).toBe(true);
+  // How to get one, step by step, and a button to the page where it's made.
+  expect(texts(h)).toContain("Gmail needs an app password for mail apps: your Google password won't work here.");
+  expect(texts(h)).toContain("Open App passwords (below), sign in, and name the new one “Mantou Mail”.");
+  h.press(text(h, "Open Google's App passwords"));
+  expect(opened).toEqual(["https://myaccount.google.com/apppasswords"]);
+  // Another provider, another guide; an address the app doesn't know, none until a password is refused.
+  h.press(inputs(h).find((n) => h.value(n) === "sam.rivera@gmail.com")!); // the email field again
+  h.key("a", { primary: true });
+  h.type("sam@icloud.com");
+  expect(texts(h)).toContain("Go to Sign-In and Security › App-Specific Passwords, and press +.");
+  h.key("a", { primary: true });
+  h.type("sam@example.org");
+  expect(texts(h).some((t) => t.includes("App-Specific"))).toBe(false);
+  expect(texts(h).some((t) => t.startsWith("Most providers take an app password over IMAP"))).toBe(true);
+});
+
+test("a company address on Microsoft 365 (by its MX records) signs in with Microsoft", async () => {
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const ms = { id: "microsoft" as const, name: "Microsoft", noPasswords: true, authUrl: "http://127.0.0.1:9/a", tokenUrl: "http://127.0.0.1:9/t", scopes: [], clientId: "x", imap: { host: "outlook.office365.com", port: 993, secure: true }, smtp: { host: "smtp.office365.com", port: 587, secure: false } };
+  const remote = new Remote(store, memorySecrets(), { oauth: { google: null, microsoft: ms }, mx: async (d) => (d === "northwind.dev" ? ["northwind-dev.mail.protection.outlook.com"] : []) });
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  await remote.attach(mail);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  mount(h.ui, () => <App mail={mail} remote={remote} />);
+  h.step();
+  h.press(text(h, "Add your account"));
+  expect(texts(h).some((t) => t.startsWith("Outlook and Microsoft 365 sign in with Microsoft. Most providers"))).toBe(true); // no Google client: only Microsoft is named
+  h.type("sam@northwind.dev");
+  expect(texts(h)).toContain("ADD AN IMAP ACCOUNT"); // until its MX records are in
+  await until(() => texts(h).includes("ADD A MICROSOFT ACCOUNT"), "the MX lookup", () => h.step());
+  expect(texts(h)).toContain("Sign in with Microsoft");
+  expect(texts(h)).not.toContain("Use an app password"); // Microsoft takes none
 });

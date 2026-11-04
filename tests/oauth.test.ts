@@ -2,7 +2,7 @@
 // Google's endpoints, and accounts that sync and send with access tokens
 // (XOAUTH2) against the IMAP and SMTP servers in the test process.
 import { afterEach, expect, test } from "bun:test";
-import { google, oauthFor, signIn } from "../src/mail/oauth";
+import { google, hostOfMx, microsoft, oauthFor, signIn } from "../src/mail/oauth";
 import { Remote } from "../src/mail/remote";
 import { memorySecrets } from "../src/mail/secrets";
 import { Store } from "../src/mail/store";
@@ -23,7 +23,7 @@ test("sign-in: the browser goes to the provider and comes back; PKCE, state and 
   expect(got).toMatchObject({ email: EMAIL, accessToken: "access-1", refreshToken: "refresh-1" });
   expect(got.expiresAt).toBeGreaterThan(Date.now() + 3_000_000);
   const q = o.state.lastAuth!;
-  expect(q.get("redirect_uri")).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/); // a port on this machine only
+  expect(q.get("redirect_uri")).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/); // a port on this machine only
   expect(q.get("code_challenge_method")).toBe("S256");
   expect(q.get("scope")).toBe("https://mail.google.com/ openid email");
   expect(q.get("login_hint")).toBe(EMAIL);
@@ -54,6 +54,22 @@ test("which addresses sign in with Google, and only with a client id", () => {
   expect(oauthFor("a@googlemail.com", { google: g })).toBe(g);
   expect(oauthFor("a@fastmail.com", { google: g })).toBeNull();
   expect(oauthFor("a@gmail.com", { google: null })).toBeNull();
+});
+
+test("Microsoft: Outlook and Hotmail addresses, and companies on Microsoft 365 or Google Workspace by their MX hosts", () => {
+  const ms = microsoft({ MANTOU_MAIL_MICROSOFT_CLIENT_ID: "id" })!;
+  const g = google({ MANTOU_MAIL_GOOGLE_CLIENT_ID: "id" })!;
+  expect(ms.clientSecret).toBeUndefined(); // a public client
+  expect(ms).toMatchObject({ imap: { host: "outlook.office365.com", port: 993 }, smtp: { host: "smtp.office365.com", port: 587, secure: false } });
+  expect(ms.scopes).toEqual(["https://outlook.office.com/IMAP.AccessAsUser.All", "https://outlook.office.com/SMTP.Send", "offline_access", "openid", "email"]);
+  for (const a of ["a@outlook.com", "a@hotmail.co.uk", "a@live.com", "a@msn.com"]) expect(oauthFor(a, { microsoft: ms })).toBe(ms);
+  expect(oauthFor("a@northwind.dev", { google: g, microsoft: ms })).toBeNull();
+  expect(oauthFor("a@northwind.dev", { google: g, microsoft: ms }, "microsoft")).toBe(ms);
+  expect(oauthFor("a@outlook.com", { microsoft: null })).toBeNull(); // no client id: nothing to sign in with
+  expect(hostOfMx(["northwind-dev.mail.protection.outlook.com."])).toBe("microsoft");
+  expect(hostOfMx(["aspmx.l.google.com", "alt1.aspmx.l.google.com"])).toBe("google");
+  expect(hostOfMx(["smtp.google.com"])).toBe("google");
+  expect(hostOfMx(["in1-smtp.messagingengine.com"])).toBeUndefined();
 });
 
 async function setup(expiresIn?: number) {
@@ -113,4 +129,33 @@ test("signing in as another account than the one typed is refused", async () => 
   await expect(remote.signInAndAdd("someone.else@gmail.com")).rejects.toThrow(`You signed in as ${EMAIL}, not someone.else@gmail.com`);
   expect(remote.accounts()).toEqual([]);
   await add();
+});
+
+test("signing in with Microsoft: the address from preferred_username, the scopes sent to the token endpoint, refresh tokens that rotate", async () => {
+  const server = await imapServer({ inbox: [{ from: "Priya Shah <priya@example.com>", subject: "Onboarding review", body: "Thursday?" }] });
+  cleanup.push(() => server.close());
+  const o = oauthServer({ email: "sam@northwind.dev", onToken: (t) => server.setAccessToken(t), as: "microsoft", expiresIn: 30 });
+  cleanup.push(o.close);
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const secrets = memorySecrets();
+  const remote = new Remote(store, secrets, { oauth: { microsoft: o.provider }, openUrl: o.browser, retry: 10, mx: async (d) => (d === "northwind.dev" ? ["northwind-dev.mail.protection.outlook.com"] : []) });
+  cleanup.push(() => remote.stop());
+  const mail = createMail([], { accounts: [], onChange: remote.onChange });
+  await remote.attach(mail);
+  expect(remote.providerOf({ email: "sam@northwind.dev" })).toBeNull(); // not known until looked up
+  expect(await remote.lookUpHost("sam@northwind.dev")).toBe("microsoft");
+  expect(remote.providerOf({ email: "sam@northwind.dev" })?.name).toBe("Microsoft");
+  const a = await remote.signInAndAdd("sam@northwind.dev", { imap: server.settings, smtp: server.smtp.settings });
+  expect(a).toMatchObject({ email: "sam@northwind.dev", oauth: "microsoft" });
+  expect(o.state.lastAuth!.get("prompt")).toBe("select_account");
+  expect(o.state.lastToken!.get("scope")).toContain("https://outlook.office.com/IMAP.AccessAsUser.All");
+  expect(o.state.lastToken!.get("client_secret")).toBeNull(); // a public client
+  await remote.syncOf(a.id)!.firstSync;
+  expect(mail.list().map((m) => m.subject)).toEqual(["Onboarding review"]);
+  // Its tokens last 30 s, so logging in again refreshes, and the new refresh token is the one kept.
+  server.kick();
+  await until(() => o.state.refreshes >= 1 && remote.statuses()[a.id]?.state === "ready", "a refresh and a new login");
+  expect(await secrets.get(a.id)).toBe(o.state.refreshToken);
+  expect(o.state.refreshToken).not.toBe("refresh-1");
 });

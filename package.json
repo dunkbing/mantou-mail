@@ -5,7 +5,7 @@
   "description": "A desktop mail client built with Mantou (Bun + TypeScript, native UI)",
   "type": "module",
   "scripts": {
-    "dev": "mantou run src/main.tsx --width 1200 --height 760 --title \"Mantou Mail\"",
+    "dev": "mantou run src/main.tsx",
     "build": "mantou build src/main.tsx --name mantou-mail",
     "test": "bun test",
     "typecheck": "bun check",
@@ -15,7 +15,7 @@
   "dependencies": {
     "imapflow": "2.10.0",
     "mailparser": "3.14.1",
-    "mantou-ui": "0.1.4",
+    "mantou-ui": "0.1.5",
     "nodemailer": "10.3.1"
   },
   "devDependencies": {

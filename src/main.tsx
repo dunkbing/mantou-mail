@@ -1,4 +1,4 @@
-// bun run dev  (mantou run src/main.tsx --width 1200 --height 760; the app can't set its window size itself yet, dunkbing/mantou#29)
+// bun run dev  (mantou run src/main.tsx)
 // Real accounts are kept in the app's data folder (MANTOU_MAIL_HOME to use another).
 import { run } from "mantou-ui";
 import { App } from "./App";
@@ -18,4 +18,4 @@ const start = remote.initial();
 const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
 void remote.attach(mail);
 
-run(() => <App mail={mail} remote={remote} />, { title: "Mantou Mail" });
+run(() => <App mail={mail} remote={remote} />, { title: "Mantou Mail", width: 1200, height: 760, minWidth: 980, minHeight: 600 });
