@@ -6,7 +6,7 @@ A desktop mail client written in TypeScript and Solid-style JSX, running on [Man
 
 IMAP accounts (Gmail, Outlook, iCloud, Fastmail, Yahoo, any IMAP server) synced to a local copy, conversations, Important/Other tabs, labels, snooze, search, replies and new messages with drafts, and undo, all from the keyboard (`?` lists the keys) or the mouse.
 
-> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each), and reading, starring, archiving, deleting and moving go back to the server; sending (SMTP) comes next, so mail written from a real account stays in Drafts for now. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
+> **Early.** Real accounts sync their Inbox, Archive, Sent, Drafts and Trash (the newest 200 messages of each, and older ones on request: "Load older messages" at the end of the list), and reading, starring, archiving, deleting and moving go back to the server, also after working offline and quitting; sending (SMTP) comes next, so mail written from a real account stays in Drafts for now. Snooze and labels are kept on this computer. Until an account is added, the app shows sample mail. What the app needs from Mantou, and how it works around it meanwhile, is in [docs/upstream.md](docs/upstream.md). Where it's going: [docs/agentic-design.md](docs/agentic-design.md).
 
 ## Run it
 

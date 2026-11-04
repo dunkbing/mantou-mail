@@ -28,8 +28,12 @@ export interface SyncHooks {
   /** The account's messages as the server has them (and the app's local fields). */
   onMessages(account: string, list: Message[]): void;
   onStatus(account: string, status: SyncStatus): void;
+  /** How many older messages a folder has on the server beyond what's kept. */
+  onOlder?(account: string, folder: Folder, count: number): void;
   /** How long "Delete forever" waits (default EXPUNGE_DELAY_MS). */
   expungeDelay?: number;
+  /** How many of a folder's newest messages are kept at first, and added by "Load older" (default WINDOW). */
+  window?: number;
 }
 
 /** The folders the app shows, by their special-use flag, then by common names. */
@@ -104,7 +108,7 @@ export class AccountSync {
   /** The account's messages that are on the server, by app id. */
   private byId = new Map<number, Message>();
   /** Changes not yet on the server, in order. */
-  private pending: Op[] = [];
+  private pending: { seq: number; op: Op }[] = [];
   /** Messages with changes in `pending`: the server's older view of them is ignored until they're sent. */
   private dirty = new Map<number, number>();
   private deletions = new Map<number, ReturnType<typeof setTimeout>>();
@@ -119,6 +123,9 @@ export class AccountSync {
 
   constructor(readonly cfg: AccountConfig, private password: string, private hooks: SyncHooks) {
     for (const m of hooks.store.messages(cfg.id)) if (m.remote) this.byId.set(m.id, m);
+    // Changes made before a quit that weren't on the server yet.
+    this.pending = hooks.store.pending<Op>(cfg.id);
+    for (const { op } of this.pending) this.dirty.set(op.id, (this.dirty.get(op.id) ?? 0) + 1);
     this.firstSync = new Promise((r) => (this.firstSyncDone = r));
   }
 
@@ -146,7 +153,7 @@ export class AccountSync {
     // Deletions still waiting for their undo window are sent now.
     for (const [id, t] of this.deletions) {
       clearTimeout(t);
-      this.pending.push({ kind: "expunge", id });
+      this.queue({ kind: "expunge", id });
     }
     this.deletions.clear();
     const c = this.client;
@@ -284,10 +291,15 @@ export class AccountSync {
         known = [];
         this.hooks.store.setUidValidity(this.cfg.id, path, validity);
       }
-      if (box.exists === 0) return this.drop(known.map((m) => m.id));
+      if (box.exists === 0) {
+        this.hooks.onOlder?.(this.cfg.id, folder, 0);
+        return this.drop(known.map((m) => m.id));
+      }
 
       const listed: { uid: number; flags: Set<string>; size: number }[] = [];
-      for await (const m of c.fetch(`${Math.max(1, box.exists - WINDOW + 1)}:*`, { uid: true, flags: true, size: true })) {
+      const window = this.hooks.store.window(this.cfg.id, folder, this.hooks.window ?? WINDOW);
+      this.hooks.onOlder?.(this.cfg.id, folder, Math.max(0, box.exists - window));
+      for await (const m of c.fetch(`${Math.max(1, box.exists - window + 1)}:*`, { uid: true, flags: true, size: true })) {
         listed.push({ uid: m.uid, flags: m.flags ?? new Set(), size: m.size ?? 0 });
       }
       const onServer = new Set(listed.map((l) => l.uid));
@@ -387,7 +399,7 @@ export class AccountSync {
   }
 
   private queue(op: Op) {
-    this.pending.push(op);
+    this.pending.push({ seq: this.hooks.store.addPending(this.cfg.id, op), op });
     this.dirty.set(op.id, (this.dirty.get(op.id) ?? 0) + 1);
   }
 
@@ -403,7 +415,7 @@ export class AccountSync {
 
   private async flush(c: ImapFlow) {
     while (this.pending.length && c.usable) {
-      const op = this.pending[0];
+      const { seq, op } = this.pending[0];
       try {
         await this.apply(c, op);
       } catch (e) {
@@ -414,6 +426,7 @@ export class AccountSync {
         if (op.kind === "move" && m && where) this.put({ ...m, folder: where }); // it's still where the server has it
       }
       this.pending.shift();
+      this.hooks.store.removePending(seq);
       const n = (this.dirty.get(op.id) ?? 1) - 1;
       if (n > 0) this.dirty.set(op.id, n);
       else this.dirty.delete(op.id);
@@ -453,6 +466,20 @@ export class AccountSync {
       }
       this.drop([m.id]);
     }
+  }
+
+  /** Keeps `more` older messages of a folder, and fetches them now. */
+  async loadOlder(folder: Folder, more = this.hooks.window ?? WINDOW) {
+    const c = this.client;
+    if (!c || !this.paths.has(folder)) return;
+    this.hooks.store.setWindow(this.cfg.id, folder, this.hooks.store.window(this.cfg.id, folder, this.hooks.window ?? WINDOW) + more);
+    this.status("syncing", `Getting older mail of ${this.cfg.email}`);
+    await this.run(async () => {
+      await this.syncFolder(c, folder);
+      await this.idleOnInbox(c);
+    });
+    this.emit();
+    this.status("ready", `${this.cfg.email} is up to date`);
   }
 
   /** Waits until everything queued so far has been sent (tests, and before quitting). */

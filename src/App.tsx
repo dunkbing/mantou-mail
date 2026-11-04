@@ -96,7 +96,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
         <View style={hline} />
         {/* flexBasis 0: the row's height comes from the window, not from what's scrolled inside it. */}
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
-          <MessageList mail={m} />
+          <MessageList mail={m} remote={props.remote} />
           <View style={vline} />
           <Reader mail={m} />
         </View>

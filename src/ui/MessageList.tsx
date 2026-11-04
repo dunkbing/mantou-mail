@@ -5,6 +5,7 @@ import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
 import { Icon, type IconName } from "./icons";
+import type { Remote } from "../mail/remote";
 
 export const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
 
@@ -102,7 +103,29 @@ export function EmptyList(props: { mail: Mail }) {
  */
 export const PAGE = 60;
 
-export function MessageList(props: { mail: Mail }) {
+/** At the end of a real folder's list: what the server has beyond what's kept. */
+function LoadOlder(props: { mail: Mail; remote: Remote }) {
+  const [loading, setLoading] = createSignal(false);
+  const n = () => props.remote.olderCount(props.mail.mailbox());
+  const load = async () => {
+    if (loading()) return;
+    setLoading(true);
+    try {
+      await props.remote.loadOlder(props.mail.mailbox());
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52 }} onPress={() => void load()}>
+      <Icon name="archive" size={14} color={loading() ? C.muted : C.accent} />
+      <Text style={{ fontSize: 13, fontWeight: 500, color: loading() ? C.muted : C.accent }}>{loading() ? "Getting older mail…" : "Load older messages"}</Text>
+      <Text style={small}>{`${n().toLocaleString("en-GB")} more on the server`}</Text>
+    </View>
+  );
+}
+
+export function MessageList(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
   let list: Node | undefined;
   const rows = new Map<number, Node>();
@@ -144,6 +167,9 @@ export function MessageList(props: { mail: Mail }) {
             );
           }}
         </For>
+        <Show when={props.remote && shown().length === m.list().length && props.remote.olderCount(m.mailbox()) > 0}>
+          <LoadOlder mail={m} remote={props.remote!} />
+        </Show>
       </View>
     </Scroll>
   );

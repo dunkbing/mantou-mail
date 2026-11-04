@@ -145,3 +145,60 @@ test("a wrong password is refused with the server's reason, and nothing is saved
   expect(env.remote.accounts()).toEqual([]);
   expect(env.mail.accounts()[0].sample).toBe(true);
 });
+
+test("changes made offline survive a quit, and reach the server on the next start", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const first = await setup({ dir });
+  const a = await addAccount(first);
+  await first.server.drop(); // offline
+  await until(() => first.remote.statuses()[a.id].state === "offline", "going offline");
+  first.mail.select(first.mail.list().find((m) => m.subject === "Onboarding review")!.id);
+  first.mail.archive(); // can't reach the server: kept
+  expect(first.store.pending(a.id).map((p) => (p.op as { kind: string }).kind)).toContain("move");
+  await first.remote.stop();
+  first.store.close();
+
+  // Next start: the network is back (a new server, as it was before the change).
+  const server = await imapServer({ inbox: [PRIYA, NEWS, CODE], sent: [REPLY], archive: [OLD] });
+  cleanup.push(() => server.close());
+  const store = new Store(dir);
+  cleanup.push(() => store.close());
+  store.saveAccount({ ...store.accounts()[0], imap: server.settings });
+  const secrets = memorySecrets();
+  await secrets.set(a.id, server.password);
+  const remote = new Remote(store, secrets);
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  expect(subjects(mail)).toEqual(["Your sign-in code"]); // archived here already
+  await remote.attach(mail);
+  await remote.syncOf(a.id)!.firstSync;
+  expect((await server.folder("Archive")).map((m) => m.subject)).toContain("Onboarding review");
+  expect((await server.folder("INBOX")).map((m) => m.subject)).not.toContain("Onboarding review");
+  expect(store.pending(a.id)).toEqual([]);
+  expect(subjects(mail)).toEqual(["Your sign-in code"]);
+});
+
+test("older mail beyond the kept window comes on request, and stays kept", async () => {
+  const many = Array.from({ length: 8 }, (_, i) => ({ from: `Person ${i} <p${i}@example.com>`, subject: `Message ${i + 1}`, body: "Hello", date: `Tue, 03 Nov 2026 0${i}:00:00 +0000` }));
+  const server = await imapServer({ inbox: many });
+  cleanup.push(() => server.close());
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const store = new Store(dir);
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { window: 5 });
+  cleanup.push(() => remote.stop());
+  const mail = createMail([], { accounts: [], onChange: remote.onChange });
+  await remote.attach(mail);
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings });
+  await remote.syncOf(a.id)!.firstSync;
+  expect(subjects(mail)).toEqual(["Message 8", "Message 7", "Message 6", "Message 5", "Message 4"]);
+  expect(remote.olderCount({ kind: "all" })).toBe(3);
+  expect(remote.olderCount({ kind: "starred" })).toBe(0);
+  await remote.loadOlder({ kind: "all" });
+  expect(subjects(mail).length).toBe(8);
+  expect(remote.olderCount({ kind: "all" })).toBe(0);
+  expect(store.window(a.id, "inbox", 5)).toBe(10); // kept from now on, also after a restart
+});

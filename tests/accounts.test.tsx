@@ -113,3 +113,26 @@ test("removing the last account brings the sample mail back", async () => {
   await until(() => mail.accounts()[0]?.sample === true, "the sample accounts", () => h.step());
   expect(texts(h)).toContain("Sunday lunch?");
 });
+
+test("the end of a real folder's list offers its older mail, and pressing it gets it", async () => {
+  const many = Array.from({ length: 8 }, (_, i) => ({ from: `Person ${i} <p${i}@example.com>`, subject: `Message ${i + 1}`, body: "Hello", date: `Tue, 03 Nov 2026 0${i}:00:00 +0000` }));
+  const server = await imapServer({ inbox: many });
+  cleanup.push(() => server.close());
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { window: 5 });
+  cleanup.push(() => remote.stop());
+  const mail = createMail([], { accounts: [], onChange: remote.onChange });
+  await remote.attach(mail);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  mount(h.ui, () => <App mail={mail} remote={remote} />);
+  const a = await remote.addAccount({ email: "testuser@example.com", password: server.password, imap: server.settings });
+  await remote.syncOf(a.id)!.firstSync;
+  h.step();
+  expect(texts(h)).toContain("3 more on the server");
+  h.press(text(h, "Load older messages"));
+  await until(() => mail.list().length === 8, "the older mail", () => h.step());
+  expect(texts(h)).toContain("Message 1");
+  expect(texts(h)).not.toContain("Load older messages");
+});

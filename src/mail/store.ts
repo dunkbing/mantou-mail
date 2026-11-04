@@ -27,6 +27,8 @@ export class Store {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS messages_remote ON messages (account, path, uid) WHERE path IS NOT NULL;
       CREATE TABLE IF NOT EXISTS folders (account TEXT NOT NULL, path TEXT NOT NULL, uidvalidity INTEGER NOT NULL, PRIMARY KEY (account, path));
+      CREATE TABLE IF NOT EXISTS pending (seq INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, op TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS windows (account TEXT NOT NULL, folder TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (account, folder));
     `);
   }
 
@@ -45,6 +47,8 @@ export class Store {
       this.db.query("DELETE FROM accounts WHERE id = ?").run(id);
       this.db.query("DELETE FROM messages WHERE account = ?").run(id);
       this.db.query("DELETE FROM folders WHERE account = ?").run(id);
+      this.db.query("DELETE FROM pending WHERE account = ?").run(id);
+      this.db.query("DELETE FROM windows WHERE account = ?").run(id);
     })();
   }
 
@@ -81,6 +85,28 @@ export class Store {
 
   setUidValidity(account: string, path: string, value: number) {
     this.db.query("INSERT OR REPLACE INTO folders (account, path, uidvalidity) VALUES (?, ?, ?)").run(account, path, value);
+  }
+
+  /** Changes not yet on the server, in order, so they survive a quit while offline. */
+  pending<T>(account: string): { seq: number; op: T }[] {
+    return this.db.query<{ seq: number; op: string }, [string]>("SELECT seq, op FROM pending WHERE account = ? ORDER BY seq").all(account).map((r) => ({ seq: r.seq, op: JSON.parse(r.op) }));
+  }
+
+  addPending(account: string, op: unknown): number {
+    return Number(this.db.query("INSERT INTO pending (account, op) VALUES (?, ?)").run(account, JSON.stringify(op)).lastInsertRowid);
+  }
+
+  removePending(seq: number) {
+    this.db.query("DELETE FROM pending WHERE seq = ?").run(seq);
+  }
+
+  /** How many of a folder's newest messages are kept (grows with "Load older"). */
+  window(account: string, folder: string, fallback: number): number {
+    return this.db.query<{ n: number }, [string, string]>("SELECT size AS n FROM windows WHERE account = ? AND folder = ?").get(account, folder)?.n ?? fallback;
+  }
+
+  setWindow(account: string, folder: string, size: number) {
+    this.db.query("INSERT OR REPLACE INTO windows (account, folder, size) VALUES (?, ?, ?)").run(account, folder, size);
   }
 
   close() {

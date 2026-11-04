@@ -3,8 +3,8 @@
 // after" (Mail's onChange) and become server changes here; the servers'
 // messages arrive through Mail.receive.
 import { createSignal } from "mantou-ui";
-import { SAMPLE_ACCOUNTS, sampleMessages, type Message } from "../data";
-import type { Mail } from "../state";
+import { SAMPLE_ACCOUNTS, sampleMessages, type Folder, type Message } from "../data";
+import type { Mail, Mailbox } from "../state";
 import { AccountSync, checkLogin, type SyncStatus } from "./imap";
 import type { ImapSettings } from "./providers";
 import type { Secrets } from "./secrets";
@@ -24,12 +24,13 @@ export class Remote {
   private lastId: number;
   private readonly statusSignal = createSignal<Record<string, SyncStatus>>({});
   private readonly listSignal = createSignal<AccountConfig[]>([]);
+  private readonly olderSignal = createSignal<Record<string, number>>({});
   /** The real accounts, as a signal (accounts() reads the store). */
   readonly list = this.listSignal[0];
   /** Each account's sync status, by account id. */
   readonly statuses = this.statusSignal[0];
 
-  constructor(readonly store: Store, readonly secrets: Secrets, private options: { expungeDelay?: number } = {}) {
+  constructor(readonly store: Store, readonly secrets: Secrets, private options: { expungeDelay?: number; window?: number } = {}) {
     this.lastId = store.maxId();
     this.listSignal[1](store.accounts());
   }
@@ -71,6 +72,11 @@ export class Remote {
       onMessages: (account, list) => this.mail?.receive(account, list),
       onStatus: (account, s) => this.setStatus(account, s),
       expungeDelay: this.options.expungeDelay,
+      window: this.options.window,
+      onOlder: (account, folder, count) => {
+        const key = `${account}:${folder}`;
+        if (this.olderSignal[0]()[key] !== count) this.olderSignal[1]({ ...this.olderSignal[0](), [key]: count });
+      },
     });
     this.syncs.set(a.id, sync);
     sync.start();
@@ -135,6 +141,26 @@ export class Remote {
     const left = this.accounts();
     if (left.length) this.mail?.setAccounts(left, this.store.messages());
     else this.mail?.setAccounts(SAMPLE_ACCOUNTS, sampleMessages());
+  }
+
+  /** The folders a mailbox shows, by account: All inboxes is every account's inbox, and so on. */
+  private foldersOf(box: Mailbox): [string, Folder][] {
+    const ids = this.accounts().map((a) => a.id);
+    if (box.kind === "all") return ids.map((id) => [id, "inbox"]);
+    if (box.kind === "account") return ids.includes(box.id) ? [[box.id, "inbox"]] : [];
+    if (box.kind === "folder" && box.folder !== "snoozed") return ids.map((id) => [id, box.folder]);
+    return []; // starred, labels and search are over what's kept
+  }
+
+  /** How many older messages of a mailbox are on the servers but not kept (0 for sample mail). */
+  olderCount(box: Mailbox): number {
+    const older = this.olderSignal[0]();
+    return this.foldersOf(box).reduce((n, [id, f]) => n + (older[`${id}:${f}`] ?? 0), 0);
+  }
+
+  /** Gets more of a mailbox's older mail from the servers, and keeps it from now on. */
+  async loadOlder(box: Mailbox) {
+    await Promise.all(this.foldersOf(box).map(([id, f]) => this.syncs.get(id)?.loadOlder(f)));
   }
 
   /** The sync of an account, for tests. */

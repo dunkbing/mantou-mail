@@ -49,6 +49,11 @@ export async function imapServer(folders: { inbox?: Mail[]; archive?: Mail[]; se
       },
     },
   });
+  const sockets = new Set<import("node:net").Socket>();
+  server.on("connection", (s: import("node:net").Socket) => {
+    sockets.add(s);
+    s.on("close", () => sockets.delete(s));
+  });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   const port = (server.address() as { port: number }).port;
   const settings: ImapSettings = { host: "127.0.0.1", port, secure: false, user: "testuser" };
@@ -78,6 +83,13 @@ export async function imapServer(folders: { inbox?: Mail[]; archive?: Mail[]; se
     },
     async close() {
       await inspector.logout().catch(() => inspector.close());
+      for (const s of sockets) s.destroy();
+      await new Promise<void>((r) => server.close(() => r()));
+    },
+    /** The server goes away at once, connections and all (the network went down). */
+    async drop() {
+      inspector.close();
+      for (const s of sockets) s.destroy();
       await new Promise<void>((r) => server.close(() => r()));
     },
   };
