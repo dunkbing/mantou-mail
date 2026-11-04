@@ -2,7 +2,7 @@
 
 Problems and gaps found while building the app, with the issue for each in [dunkbing/mantou](https://github.com/dunkbing/mantou/issues) and the workaround in use. Code comments next to each workaround name the issue, so it's easy to find and remove once Mantou ships a fix. A need that can't be filed yet gets drafted here, ready to paste into Mantou's issue template, until someone files it.
 
-The app uses `mantou-ui` 0.1.5 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb.
+The app uses `mantou-ui` 0.1.5 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
 
 ## Open
 
@@ -11,6 +11,8 @@ The app uses `mantou-ui` 0.1.5 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 | Telling a cancelled dialog from one that couldn't be shown (and Linux's zenity cancel answers `[]`) | bug | [dunkbing/mantou#28](https://github.com/dunkbing/mantou/issues/28) | a guess at whether the system has dialogs (zenity, or a portal and D-Bus); without them, a path field to attach, Save as goes to Downloads, removing an account doesn't ask (`hasDialogs` in `src/mail/files.ts`) |
 | Setting an `<Input>`'s value leaves the caret where it was; no way to place it | bug | [dunkbing/mantou#30](https://github.com/dunkbing/mantou/issues/30) | taking an address suggestion recreates the To/Cc/Bcc input, whose caret starts at the end (`AddressField` in `src/ui/Compose.tsx`) |
 | A right click (to open a context menu), context menus on Linux and Windows, opening a file or a URL with the system's app | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | no context menus; opening attachments, and Google's sign-in page, with `open`/`xdg-open`/`start` (`src/mail/files.ts`, `src/mail/oauth.ts`) |
+| `setMenu` while the app is being set up answers `false` and installs nothing (macOS) | bug | [dunkbing/mantou#48](https://github.com/dunkbing/mantou/issues/48) | the menu is set at the first layout (`installMenu` in `src/App.tsx`) |
+| The Edit menu's predefined items (undo, cut, copy, paste, select all) take Cmd+Z/X/C/V/A before an `<Input>` sees them (macOS) | bug | [dunkbing/mantou#49](https://github.com/dunkbing/mantou/issues/49) | the Edit menu has only Find; the inputs handle those keys (`src/ui/menu.ts`) |
 | Rich text (to show HTML mail, and a formatting composer) | feature | Mantou's [#15](https://github.com/dunkbing/mantou/issues/15) | mail shown as text; the composer takes Markdown and sends it as HTML too (`src/mail/format.ts`) |
 | A virtualized list with rows of different heights | feature | [dunkbing/mantou#31](https://github.com/dunkbing/mantou/issues/31) (`<List>` in 0.1.5, [#19](https://github.com/dunkbing/mantou/issues/19), takes rows of one height) | rows rendered a page at a time, more as the scroll nears the end (`MessageList`) |
 

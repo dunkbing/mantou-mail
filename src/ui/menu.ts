@@ -13,7 +13,9 @@ const sep: MenuItem = { separator: true };
 export const APP_MENU: MenuItem[] = [
   { label: "Mantou Mail", items: [{ role: "about" }, sep, item("accounts", "Accounts…", "cmd+,"), sep, { role: "hide" }, { role: "hideOthers" }, { role: "showAll" }, sep, { role: "quit" }] },
   { label: "File", items: [item("compose", "New Message", "cmd+n")] },
-  { label: "Edit", items: [{ role: "undo" }, { role: "redo" }, sep, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }, sep, item("search", "Find", "cmd+f")] },
+  // No undo/cut/copy/paste/select-all items: their key equivalents take Cmd+Z/X/C/V/A before an input sees them
+  // (workaround for dunkbing/mantou#49), and the inputs handle those keys themselves.
+  { label: "Edit", items: [item("search", "Find", "cmd+f")] },
   {
     label: "Message",
     items: [

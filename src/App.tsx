@@ -50,7 +50,12 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
     previous: () => m.move(-1),
     shortcuts: () => setHelp(true),
   };
-  void setMenu(APP_MENU);
+  // Workaround for dunkbing/mantou#48: a setMenu while the app is being set up answers false (the core
+  // isn't running yet), so it's called at the first layout, which can't be sooner.
+  let menuSet = false;
+  const installMenu = () => {
+    if (!menuSet) void setMenu(APP_MENU).then((ok) => (menuSet = ok));
+  };
   onCleanup(ui.onMenu((id) => {
     if (accounts() || help() || m.composing()) return; // a dialog is open: the menu waits, as the keys do
     commands[id as Command]?.();
@@ -121,7 +126,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   return (
     // minHeight 0: flex items are at least as tall as their content otherwise
     // (as in CSS), and the list and reader clip and scroll instead.
-    <View style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: "#ffffff" }}>
+    <View onLayout={installMenu} style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: "#ffffff" }}>
       <Sidebar mail={m} remote={props.remote} searchRef={(n) => (searchInput = n)} onAccounts={() => setAccounts(true)} />
       <View style={vline} />
       <View style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}>
