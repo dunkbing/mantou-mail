@@ -432,6 +432,18 @@ test("a right click on one of several picked rows keeps them, and the menu archi
   expect(mail.selected()!.id).toBe(other.id);
 });
 
+test("when the server sends a message back as another row (same Message-ID), the selection stays on it", () => {
+  const { mail } = app();
+  const base = sampleMessages().filter((m) => m.folder === "inbox" && m.important);
+  const acct = base[0].account;
+  const mk = (id: number, messageId: string, d: number): (typeof base)[number] => ({ ...base[0], id, messageId, account: acct, remote: { path: "INBOX", uid: id }, date: new Date(Date.UTC(2026, 10, 3) - d * 3_600_000) });
+  mail.receive(acct, [mk(901, "a@x", 1), mk(902, "b@x", 2), mk(903, "c@x", 3)]);
+  mail.select(902);
+  expect(mail.selected()!.id).toBe(902);
+  mail.receive(acct, [mk(901, "a@x", 1), mk(912, "b@x", 2), mk(903, "c@x", 3)]); // b came back as another row
+  expect(mail.selected()!.id).toBe(912);
+});
+
 test("Send Later presets: in an hour, tomorrow morning and afternoon, Monday", () => {
   const at = (from: string) => sendLaterOptions(new Date(from)).map((o) => `${o.name} ${o.at.toString().slice(0, 21)}`);
   expect(at("2026-11-03T09:30:00")).toEqual(["In an hour Tue Nov 03 2026 10:30", "Tomorrow morning Wed Nov 04 2026 08:00", "Tomorrow afternoon Wed Nov 04 2026 13:00", "Monday morning Mon Nov 09 2026 08:00"]);

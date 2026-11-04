@@ -421,7 +421,19 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     receive(account: string, list: Message[]) {
       // A message sent from here is replaced by the server's copy once it's in Sent there.
       const arrived = new Set(list.map((m) => m.messageId).filter(Boolean));
-      setMessagesRaw([...messages().filter((m) => (m.account !== account || !m.remote) && !(m.messageId && !m.outbox && !m.remote && arrived.has(m.messageId))), ...list]);
+      const before = messages(), sel = selected(), was = picked();
+      batch(() => {
+        setMessagesRaw([...before.filter((m) => (m.account !== account || !m.remote) && !(m.messageId && !m.outbox && !m.remote && arrived.has(m.messageId))), ...list]);
+        // A message can come back as another row (the server's copy in another folder, or after a move): the selection follows it by its Message-ID, instead of falling back to the first one.
+        const now = messages();
+        const same = (id: number) => {
+          if (now.some((m) => m.id === id)) return id;
+          const old = before.find((m) => m.id === id);
+          return (old?.messageId && now.find((m) => m.account === old.account && m.messageId === old.messageId)?.id) || id;
+        };
+        if (sel && selectedId() !== null) setSelectedId(same(sel.id));
+        if (was.size) setPicked(new Set<number>([...was].map(same)));
+      });
     },
     patchQuiet,
     /** A message that couldn't be sent goes back to Drafts, to fix and send again. */

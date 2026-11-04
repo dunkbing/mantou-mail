@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- The selected conversation stays selected when the server's mail refreshes (it used to jump back to the first one when its copy came back as another message).
 - Updated Mantou to 0.2.1: a window can hide its title bar and keep the traffic lights (for a custom title row later).
 - Shift+click and Ctrl/⌘+click keep working after a right-click menu has been closed.
 - Right-clicking one of several picked conversations keeps them picked, and the menu applies to all of them.
