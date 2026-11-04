@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Select several conversations with Shift+click (a range) or Ctrl/⌘+click (one more), then archive, delete, star, mark unread or move them to the Inbox together.
+- Text in an open message can be selected and copied.
 - Dark mode: the app follows the system's light or dark appearance, and changes with it.
 - Dropping files on the window while writing a message attaches them.
 - The dock icon shows how many messages are unread (macOS).

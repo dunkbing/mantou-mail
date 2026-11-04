@@ -563,3 +563,27 @@ test("it says attached but nothing is: Send warns once, and sends on the second 
   h.press(text(h, "Send"));
   expect(mail.composing()).toBe(false);
 });
+
+test("several conversations picked together (Shift: a range, Ctrl/⌘: one more) are archived, starred and marked unread at once", () => {
+  const { h, mail } = app();
+  const first = mail.list()[0].id;
+  mail.select(first);
+  mail.pick(mail.list()[2].id, true); // Shift+click: the range from the selected one
+  expect([...mail.picked()]).toEqual(mail.list().slice(0, 3).map((m) => m.id));
+  expect(texts(h)).toContain("3 conversations selected");
+  mail.pick(mail.list()[1].id, false); // Ctrl+click takes one off
+  expect(mail.picked().size).toBe(2);
+  mail.pick(mail.list()[1].id, false); // and puts it back
+  const ids = [...mail.picked()];
+  mail.star();
+  expect(ids.every((id) => mail.messages().find((m) => m.id === id)!.starred)).toBe(true);
+  expect(mail.status()).toBe("Starred 3 conversations");
+  mail.pick(mail.list()[2].id, true);
+  mail.archive();
+  expect(ids.every((id) => mail.messages().find((m) => m.id === id)!.folder === "archive")).toBe(true);
+  expect(mail.picked().size).toBe(0);
+  mail.undo();
+  expect(ids.every((id) => mail.messages().find((m) => m.id === id)!.folder === "inbox")).toBe(true);
+  mail.select(first); // a plain click is one again
+  expect(mail.picked().size).toBe(0);
+});

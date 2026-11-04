@@ -44,7 +44,7 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
         <Text style={small()}>{longDate(msg().date)}</Text>
       </View>
       <View style={{ gap: 14 }}>
-        <For each={msg().body}>{(p) => <Text style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>{p}</Text>}</For>
+        <For each={msg().body}>{(p) => <Text selectable style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>{p}</Text>}</For>
       </View>
       <Show when={msg().attachments?.length}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -126,10 +126,13 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
   }));
   return (
     <View style={{ flexGrow: 1, flexShrink: 1, backgroundColor: C.surface }}>
-      <Show when={m.selected()} fallback={<Text style={[small(), { padding: 48, textAlign: "center" }]}>No message selected</Text>}>
+      <Show
+        when={m.picked().size < 2 && m.selected()}
+        fallback={<Text style={[small(), { padding: 48, textAlign: "center" }]}>{m.picked().size > 1 ? `${m.picked().size} conversations selected` : "No message selected"}</Text>}
+      >
         <Scroll ref={(n) => (scroll = n)} style={{ flexGrow: 1, minHeight: 0 }}>
           <View style={{ paddingTop: 28, paddingLeft: 36, paddingRight: 36, paddingBottom: 28, gap: 18 }}>
-            <Text style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject || "(no subject)"}</Text>
+            <Text selectable style={{ fontSize: 21, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{m.selected()!.subject || "(no subject)"}</Text>
             <Show when={m.selected()!.folder === "scheduled" && m.selected()!.outbox?.at}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 10, borderRadius: 8, backgroundColor: C.accentSoft }}>
                 <Icon name="calendar" size={16} color={C.accent} />

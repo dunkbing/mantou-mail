@@ -333,9 +333,41 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     };
   }
 
+  /** Messages picked together with Shift or Ctrl/⌘ + click (empty, or two or more; the selected one is among them). */
+  const [picked, setPicked] = createSignal<ReadonlySet<number>>(new Set<number>());
+  /** The ids an action applies to: the picked ones, else the selected message. */
+  const targets = () => (picked().size > 1 ? picked() : new Set<number>(selected() ? [selected()!.id] : []));
+  /** Shift: everything from the selected message to this one; otherwise this one is added or taken off. */
+  function pick(id: number, range: boolean) {
+    const l = list(), from = l.findIndex((m) => m.id === selected()?.id), to = l.findIndex((m) => m.id === id);
+    if (to < 0) return;
+    const next = new Set<number>(picked().size ? picked() : selected() ? [selected()!.id] : []);
+    if (range && from >= 0) {
+      next.clear();
+      for (const m of l.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(m.id);
+    } else if (next.has(id)) next.delete(id);
+    else next.add(id);
+    batch(() => {
+      closePanel();
+      setPicked(next.size > 1 ? next : new Set<number>());
+    });
+  }
+  /** Changes every target at once (a null result takes the message out of the list), then the pick is over. */
+  function bulk(f: (m: Message) => Message | null, message: string, leaves: boolean) {
+    const ids = targets();
+    batch(() => {
+      change((ms) => ms.flatMap((m) => (ids.has(m.id) ? (f(m) ?? []) : [m])), message);
+      setPicked(new Set<number>());
+      if (leaves) setSelectedId(null);
+    });
+  }
+  const many = () => picked().size > 1;
+  const plural = (verb: string) => `${verb} ${picked().size} conversations`;
+
   function select(id: number) {
     batch(() => {
       closePanel();
+      setPicked(new Set<number>());
       setSelectedId(id);
       if (messages().find((m) => m.id === id)?.unread) setMessages(patch(id, { unread: false })(messages()));
     });
@@ -358,6 +390,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   function open(m: Mailbox) {
     batch(() => {
       closePanel();
+      setPicked(new Set<number>());
       setMailbox(m);
       setSelectedId(null);
     });
@@ -412,7 +445,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         if (!ids.has(draft().account)) setDraft({ ...draft(), account: list[0]?.id ?? "" });
       });
     },
-    unread, count, unreadInTab, threadSize, select, open, closePanel,
+    unread, count, unreadInTab, threadSize, select, open, closePanel, pick, picked,
     replying: () => panel() === "reply",
 
     move(delta: number) {
@@ -424,18 +457,21 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     setTab(t: Tab) {
       batch(() => {
         closePanel();
+        setPicked(new Set<number>());
         setTab(t);
         setSelectedId(null);
       });
     },
-    archive: () => file("archive", "Archived", { unread: false }),
+    archive: () => (many() ? bulk((m) => ({ ...m, folder: "archive", unread: false }), plural("Archived"), true) : file("archive", "Archived", { unread: false })),
     /** Deletes the message: to the trash, or for good from the trash (undo still brings it back). */
     remove() {
+      if (many()) return bulk((m) => (m.folder === "trash" ? null : { ...m, folder: "trash", unread: false, ...(m.folder === "scheduled" ? { outbox: undefined } : {}) }), plural("Deleted"), true);
       if (selected()?.folder === "trash") leave((s) => (ms) => ms.filter((m) => m.id !== s.id), () => "Deleted forever");
       else if (selected()?.folder === "scheduled") file("trash", "Cancelled and deleted", { outbox: undefined });
       else file("trash", "Deleted", { unread: false });
     },
     moveToInbox() {
+      if (many()) return bulk((m) => (isFiledAway(m) ? { ...m, folder: "inbox", snoozedUntil: undefined } : m), plural("Moved to Inbox"), true);
       if (selected() && isFiledAway(selected()!)) file("inbox", "Moved to Inbox", { snoozedUntil: undefined });
     },
     snooze(i: number) {
@@ -449,10 +485,18 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       change(patch(s.id, { labels: has ? s.labels.filter((x) => x !== id) : [...s.labels, id] }), `${has ? "Removed" : "Added"} label ${l.name}`);
     },
     star() {
+      if (many()) {
+        const all = [...picked()].every((id) => messages().find((m) => m.id === id)?.starred);
+        return bulk((m) => ({ ...m, starred: !all }), plural(all ? "Unstarred" : "Starred"), false);
+      }
       const s = selected();
       if (s) change(patch(s.id, { starred: !s.starred }), s.starred ? "Unstarred" : "Starred");
     },
     toggleUnread() {
+      if (many()) {
+        const all = [...picked()].every((id) => messages().find((m) => m.id === id)?.unread);
+        return bulk((m) => ({ ...m, unread: !all }), plural(all ? "Marked as read" : "Marked as unread"), false);
+      }
       const s = selected();
       if (s) change(patch(s.id, { unread: !s.unread }), s.unread ? "Marked as read" : "Marked as unread");
     },

@@ -26,7 +26,9 @@ export function rowName(mail: Mail, msg: Message) {
 
 export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void; onMenu: (message: Message, e: PointerEvent) => void }) {
   const msg = () => props.message;
-  const selected = () => props.mail.selected()?.id === msg().id;
+  const selected = () => props.mail.selected()?.id === msg().id || props.mail.picked().has(msg().id);
+  /** Shift or Ctrl/⌘ held as the button went down (a press doesn't carry the keys). */
+  let held: "range" | "toggle" | null = null;
   const size = () => props.mail.threadSize(msg());
   /** In mixed lists (labels, starred, search), where a message lives. */
   const folder = () => (props.mail.mailbox().kind === "folder" ? undefined : FOLDER_NAMES[msg().folder]);
@@ -34,7 +36,12 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
     <View
       ref={props.ref}
       style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : C.surface }}
-      onPress={() => props.mail.select(msg().id)}
+      onPointerDown={(e) => (held = e.button !== 0 ? null : e.shift ? "range" : e.ctrl || e.meta ? "toggle" : null)}
+      onPress={() => {
+        if (held) props.mail.pick(msg().id, held === "range");
+        else props.mail.select(msg().id);
+        held = null;
+      }}
       onContextMenu={(e) => props.onMenu(msg(), e)}
     >
       <View style={{ width: 6, height: 6, flexShrink: 0, marginTop: 13, borderRadius: 3, backgroundColor: msg().unread ? C.unread : "transparent" }} />
