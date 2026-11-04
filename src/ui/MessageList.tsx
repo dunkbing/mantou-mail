@@ -155,9 +155,9 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
   const m = props.mail;
   let list: Node | undefined;
   const size = useWindowSize();
-  // A right click (or Control + click) selects the row, then asks what to do with it: its commands are the app menu's.
+  // A right click (or Control + click) selects the row (unless it's one of several picked), then asks what to do with it: its commands are the app menu's.
   const menu = (msg: Message, e: PointerEvent) => {
-    m.select(msg.id);
+    if (!m.picked().has(msg.id)) m.select(msg.id); // on one of several picked rows, the menu is for all of them
     // Workaround for dunkbing/mantou#51: on macOS the menu's y is measured from the bottom of the window.
     const y = process.platform === "darwin" ? size().height - e.y : e.y;
     void showMenu(ROW_MENU, { x: e.x, y }).then((id) => id && props.onCommand(id));

@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Right-clicking one of several picked conversations keeps them picked, and the menu applies to all of them.
 - Select several conversations with Shift+click (a range) or Ctrl/⌘+click (one more), then archive, delete, star, mark unread or move them to the Inbox together.
 - Text in an open message can be selected and copied.
 - Dark mode: the app follows the system's light or dark appearance, and changes with it.

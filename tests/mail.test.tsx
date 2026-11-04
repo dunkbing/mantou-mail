@@ -409,6 +409,29 @@ test("a right click on a row selects it and opens a menu of what to do with it",
   expect(mail.messages().find((m) => m.subject === "Sunday lunch?")!.folder).toBe("archive");
 });
 
+test("a right click on one of several picked rows keeps them, and the menu archives all of them", async () => {
+  const { h, mail } = app();
+  mail.select(mail.list()[0].id);
+  mail.pick(mail.list()[2].id, true);
+  h.step();
+  const ids = [...mail.picked()];
+  const [x, y] = h.rect(text(h, mail.list()[1].subject))!;
+  h.pointerButton("down", 2, x + 10, y + 5);
+  await Bun.sleep(0);
+  expect([...mail.picked()]).toEqual(ids); // still picked
+  h.chooseMenu("archive");
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
+  expect(ids.every((id) => mail.messages().find((m) => m.id === id)!.folder === "archive")).toBe(true);
+  // and on a row that isn't picked, the pick ends and that row is selected
+  mail.pick(mail.list()[1].id, true);
+  const other = mail.list()[3];
+  const [ox, oy] = h.rect(text(h, other.subject))!;
+  h.pointerButton("down", 2, ox + 10, oy + 5);
+  await Bun.sleep(0);
+  expect(mail.picked().size).toBe(0);
+  expect(mail.selected()!.id).toBe(other.id);
+});
+
 test("Send Later presets: in an hour, tomorrow morning and afternoon, Monday", () => {
   const at = (from: string) => sendLaterOptions(new Date(from)).map((o) => `${o.name} ${o.at.toString().slice(0, 21)}`);
   expect(at("2026-11-03T09:30:00")).toEqual(["In an hour Tue Nov 03 2026 10:30", "Tomorrow morning Wed Nov 04 2026 08:00", "Tomorrow afternoon Wed Nov 04 2026 13:00", "Monday morning Mon Nov 09 2026 08:00"]);
