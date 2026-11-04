@@ -28,12 +28,20 @@ export interface SyncHooks {
   /** The account's messages as the server has them (and the app's local fields). */
   onMessages(account: string, list: Message[]): void;
   onStatus(account: string, status: SyncStatus): void;
+  /**
+   * How to log in now: the password, or a fresh access token (`renew`: the
+   * server refused the last one, get a new one). Null when there's none: the
+   * password, or signing in again, is needed.
+   */
+  login(renew?: boolean): Promise<Login | null>;
   /** How many older messages a folder has on the server beyond what's kept. */
   onOlder?(account: string, folder: Folder, count: number): void;
   /** How long "Delete forever" waits (default EXPUNGE_DELAY_MS). */
   expungeDelay?: number;
   /** How many of a folder's newest messages are kept at first, and added by "Load older" (default WINDOW). */
   window?: number;
+  /** The first wait before connecting again, doubled each time (default 2 s; tests make it short). */
+  retry?: number;
 }
 
 /** The folders the app shows, by their special-use flag, then by common names. */
@@ -67,14 +75,17 @@ export function explain(e: unknown, settings: ImapSettings): string {
   return err.responseText || err.message || String(e);
 }
 
-export function newClient(s: ImapSettings, password: string): ImapFlow {
+/** How an account logs in: its password, or an access token from signing in with its provider (XOAUTH2). */
+export type Login = { pass: string } | { accessToken: string };
+
+export function newClient(s: ImapSettings, login: Login): ImapFlow {
   return new ImapFlow({
     host: s.host,
     port: s.port,
     secure: s.secure,
     // Without TLS from the start, STARTTLS is required: passwords never go in the clear (except to this machine).
     doSTARTTLS: s.secure || isLocalHost(s.host) ? undefined : true,
-    auth: { user: s.user, pass: password },
+    auth: "pass" in login ? { user: s.user, pass: login.pass } : { user: s.user, accessToken: login.accessToken },
     logger: false,
     connectionTimeout: 20_000,
     greetingTimeout: 15_000,
@@ -85,8 +96,8 @@ export function newClient(s: ImapSettings, password: string): ImapFlow {
 }
 
 /** Logs in and out once, for the Add account form; throws a readable error. */
-export async function checkLogin(s: ImapSettings, password: string): Promise<void> {
-  const c = newClient(s, password);
+export async function checkLogin(s: ImapSettings, login: Login): Promise<void> {
+  const c = newClient(s, login);
   c.on("error", () => {});
   try {
     await c.connect();
@@ -121,7 +132,7 @@ export class AccountSync {
   readonly firstSync: Promise<void>;
   private firstSyncDone!: () => void;
 
-  constructor(readonly cfg: AccountConfig, private password: string, private hooks: SyncHooks) {
+  constructor(readonly cfg: AccountConfig, private hooks: SyncHooks) {
     for (const m of hooks.store.messages(cfg.id)) if (m.remote) this.byId.set(m.id, m);
     // Changes made before a quit that weren't on the server yet.
     this.pending = hooks.store.pending<Op>(cfg.id);
@@ -172,18 +183,32 @@ export class AccountSync {
     this.timers.push(t);
   }
 
-  private async connect() {
+  private async connect(renew = false): Promise<void> {
     if (this.stopped) return;
     this.status("connecting", `Connecting to ${this.cfg.imap.host}…`);
-    const c = newClient(this.cfg.imap, this.password);
+    let login: Login | null;
+    try {
+      login = await this.hooks.login(renew);
+    } catch (e) {
+      return this.offline((e as Error).message);
+    }
+    if (this.stopped) return;
+    if (!login) {
+      this.status("needs-password", this.cfg.oauth ? `Sign in to ${this.cfg.email} again to sync it` : `Enter the password for ${this.cfg.email} to sync it`);
+      this.firstSyncDone();
+      return;
+    }
+    const c = newClient(this.cfg.imap, login);
     c.on("error", () => {}); // reported through close and the failed command
     try {
       await c.connect();
     } catch (e) {
       c.close();
       const err = e as { authenticationFailed?: boolean };
+      // A token the server doesn't take any more: once with a new one, then it's a sign-in.
+      if (err.authenticationFailed && "accessToken" in login && !renew) return this.connect(true);
       if (err.authenticationFailed) {
-        this.status("needs-password", explain(e, this.cfg.imap));
+        this.status("needs-password", "accessToken" in login ? `Sign in to ${this.cfg.email} again to sync it` : explain(e, this.cfg.imap));
         this.firstSyncDone();
         return;
       }
@@ -217,7 +242,7 @@ export class AccountSync {
   private offline(why: string) {
     if (this.stopped) return;
     this.failures++;
-    const wait = Math.min(5 * 60_000, 2_000 * 2 ** Math.min(this.failures, 8));
+    const wait = Math.min(5 * 60_000, (this.hooks.retry ?? 2_000) * 2 ** Math.min(this.failures, 8));
     this.status("offline", `${why}. Showing saved mail; trying again in ${Math.round(wait / 1000)} s`);
     this.firstSyncDone();
     this.later(wait, () => void this.connect());

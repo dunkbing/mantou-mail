@@ -1,5 +1,6 @@
 // The Accounts dialog: the real accounts and how their sync is going, and the
-// form that adds one (or asks for a password again).
+// form that adds one (or asks for a password again). Addresses whose provider
+// signs in with OAuth (Gmail) get "Sign in with Google" instead of a password.
 import { For, Input, Show, Text, View, createSignal, onMount, type JSX, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
 import { guessSettings, guessSmtp, providerFor, type ImapSettings, type SmtpSettings } from "../mail/providers";
@@ -52,6 +53,7 @@ function TextField(props: { value: string; onChange: (v: string) => void; placeh
 }
 
 function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect: () => void }) {
+  const provider = () => (props.account.oauth ? props.remote.providerOf(props.account) : null);
   const status = () => props.remote.statuses()[props.account.id];
   const remove = async () => {
     const yes = await props.remote.confirm({
@@ -73,7 +75,7 @@ function AccountRow(props: { remote: Remote; account: AccountConfig; onReconnect
         </View>
       </View>
       <Show when={status()?.state === "needs-password"}>
-        <TextButton label="Enter password" onPress={props.onReconnect} />
+        <TextButton label={provider() ? `Sign in with ${provider()!.name}` : "Enter password"} onPress={props.onReconnect} />
       </Show>
       <TextButton label="Remove" onPress={() => void remove()} />
     </View>
@@ -93,6 +95,11 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   const [keychain, setKeychain] = createSignal(true);
+  /** An address that could sign in with its provider, typing a password instead. */
+  const [usePassword, setUsePassword] = createSignal(false);
+  /** Cancels the sign-in waiting in the browser. */
+  const [signingIn, setSigningIn] = createSignal<AbortController | null>(null);
+  const oauth = () => (usePassword() ? null : r.providerOf({ email: email() }));
   let passwordInput: Node | undefined;
   onMount(() => void r.secrets.persistent().then(setKeychain));
 
@@ -115,8 +122,38 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
     setError("");
     setSmtp({ ...smtp(), ...p, ...(p.port !== undefined ? { secure: p.port === 465 } : {}) });
   };
+  const reset = () => {
+    setEmail("");
+    setPassword("");
+    setSender("");
+    setServer({ host: "", port: 993, secure: true, user: "" });
+    setSmtp({ host: "", port: 465, secure: true, user: "" });
+    setCustom(false);
+    setReconnecting(null);
+    setUsePassword(false);
+  };
+  /** Signs in with the provider in the browser; the dialog waits, with Cancel. */
+  const signIn = async (address = email()) => {
+    if (busy()) return;
+    if (!/@/.test(address)) return setError("Enter your email address");
+    const stop = new AbortController();
+    setSigningIn(stop);
+    setBusy(true);
+    setError("");
+    try {
+      await r.signInAndAdd(address, { sender: sender(), signal: stop.signal, ...(custom() ? { imap: server(), smtp: smtp() } : {}) });
+      reset();
+    } catch (e) {
+      if (!stop.signal.aborted) setError((e as Error).message);
+    } finally {
+      setSigningIn(null);
+      setBusy(false);
+    }
+  };
   const reconnect = (a: AccountConfig) => {
+    if (a.oauth && r.providerOf(a)) return void signIn(a.email);
     setReconnecting(a.id);
+    setUsePassword(true); // it was added with a password: that's what it asks for again
     setEmail(a.email);
     setSender(a.sender);
     setServer(a.imap);
@@ -136,13 +173,7 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
     setError("");
     try {
       await r.addAccount({ email: email(), password: password(), imap: server(), smtp: smtp(), sender: sender() });
-      setEmail("");
-      setPassword("");
-      setSender("");
-      setServer({ host: "", port: 993, secure: true, user: "" });
-      setSmtp({ host: "", port: 465, secure: true, user: "" });
-      setCustom(false);
-      setReconnecting(null);
+      reset();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -166,13 +197,23 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
           <View style={hline} />
         </Show>
         <View style={{ paddingLeft: 24, paddingRight: 24, paddingTop: 18, paddingBottom: 8, gap: 4 }}>
-          <Text style={caption}>{reconnecting() ? `PASSWORD FOR ${reconnecting()!.toUpperCase()}` : "ADD AN IMAP ACCOUNT"}</Text>
+          <Text style={caption}>{reconnecting() ? `PASSWORD FOR ${reconnecting()!.toUpperCase()}` : oauth() ? `ADD A ${oauth()!.name.toUpperCase()} ACCOUNT` : "ADD AN IMAP ACCOUNT"}</Text>
           <Text style={[small, { lineHeight: 1.5, paddingBottom: 8 }]}>
-            {providerFor(email())?.passwordHint ?? "Gmail, Outlook, iCloud, Fastmail, Yahoo and most other providers work over IMAP; many need an app password for it."}
+            {oauth()
+              ? `Your browser opens ${oauth()!.name}'s sign-in page. Mantou Mail never sees your password; it keeps a sign-in in the system keychain, which you can revoke from your ${oauth()!.name} account.`
+              : (providerFor(email())?.passwordHint ?? "iCloud, Fastmail, Yahoo and most other providers work over IMAP; many need an app password for it.")}
           </Text>
           <Field label="Email">
-            <TextField autoFocus value={email()} onChange={editEmail} placeholder="you@example.com" readOnly={!!reconnecting()} onSubmit={() => passwordInput?.focus()} />
+            <TextField autoFocus value={email()} onChange={editEmail} placeholder="you@example.com" readOnly={!!reconnecting() || !!signingIn()} onSubmit={() => (oauth() ? void signIn() : passwordInput?.focus())} />
           </Field>
+          <Show when={oauth()}>
+            <Field label="Your name">
+              <TextField value={sender()} onChange={setSender} placeholder="As it appears on mail you send" onSubmit={() => void signIn()} />
+            </Field>
+          </Show>
+        </View>
+        <Show when={!oauth()}>
+        <View style={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 8, gap: 4 }}>
           <Field label="Password">
             <TextField secure ref={(n) => (passwordInput = n)} value={password()} onChange={(v) => (setPassword(v), setError(""))} placeholder="Password or app password" onSubmit={() => void connect()} />
           </Field>
@@ -193,12 +234,24 @@ export function Accounts(props: { remote: Remote; onClose: () => void }) {
             <TextField value={server().user} onChange={(user) => editServer({ user })} placeholder="Usually your email address" />
           </Field>
         </View>
+        </Show>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 64, paddingLeft: 24, paddingRight: 24, paddingBottom: 8 }}>
-          <SendButton label={busy() ? "Connecting…" : "Connect"} keys="Enter" onPress={() => void connect()} />
+          <Show
+            when={oauth() || signingIn()}
+            fallback={<SendButton label={busy() ? "Connecting…" : "Connect"} keys="Enter" onPress={() => void connect()} />}
+          >
+            <SendButton label={signingIn() ? "Waiting for the browser…" : `Sign in with ${oauth()?.name ?? "Google"}`} keys="Enter" onPress={() => void signIn()} />
+            <Show when={signingIn()} fallback={<TextButton label="Use an app password" onPress={() => (setUsePassword(true), setError(""))} />}>
+              <TextButton label="Cancel" onPress={() => signingIn()?.abort()} />
+            </Show>
+          </Show>
+          <Show when={usePassword() && r.providerOf({ email: email() })}>
+            <TextButton label={`Sign in with ${r.providerOf({ email: email() })!.name}`} onPress={() => (setUsePassword(false), setError(""))} />
+          </Show>
           <Show when={reconnecting()}>
             <TextButton label="Cancel" onPress={() => (setReconnecting(null), setEmail(""), setPassword(""), setCustom(false))} />
           </Show>
-          <Show when={error()} fallback={<Text style={[small, { flexShrink: 1, lineHeight: 1.4 }]}>{keychain() ? "The password is kept in the system keychain." : "There's no system keychain here: the password is kept until you quit."}</Text>}>
+          <Show when={error()} fallback={<Text style={[small, { flexShrink: 1, lineHeight: 1.4 }]}>{signingIn() ? "Finish signing in in your browser." : oauth() ? "" : keychain() ? "The password is kept in the system keychain." : "There's no system keychain here: the password is kept until you quit."}</Text>}>
             <Text style={{ flexShrink: 1, fontSize: 12, lineHeight: 1.4, color: "#b91c1c" }}>{error()}</Text>
           </Show>
         </View>

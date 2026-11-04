@@ -20,7 +20,9 @@ bun install
 bun run dev
 ```
 
-Add an account with "Add your account" in the sidebar. To try it without one, start a local IMAP and SMTP server with the sample mail, then add `sam@northwind.dev`, password `testpass`, servers `127.0.0.1` (IMAP port 1143, SMTP port 1025), username `testuser`:
+Add an account with "Add your account" in the sidebar. Gmail can sign in with Google once the app has a client ID ([docs/oauth.md](docs/oauth.md)); otherwise it takes an app password. Outlook doesn't work yet: Microsoft only allows signing in with Microsoft, which is next.
+
+To try it without a real account, start a local IMAP and SMTP server with the sample mail, then add `sam@northwind.dev`, password `testpass`, servers `127.0.0.1` (IMAP port 1143, SMTP port 1025), username `testuser`:
 
 ```bash
 bun run demo-server

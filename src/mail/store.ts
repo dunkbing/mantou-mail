@@ -6,11 +6,14 @@ import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import type { Account, Message } from "../data";
 import type { ImapSettings, SmtpSettings } from "./providers";
+import type { OAuthProviderId } from "./oauth";
 
 export interface AccountConfig extends Account {
   imap: ImapSettings;
   /** Where mail is sent (accounts added before sending existed guess it). */
   smtp?: SmtpSettings;
+  /** Signs in with this provider (its refresh token is kept in place of a password). */
+  oauth?: OAuthProviderId;
 }
 
 const DATES = new Set(["date", "waitingSince"]);

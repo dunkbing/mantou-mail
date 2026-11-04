@@ -6,6 +6,7 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import { recipients, type Contact, type Message } from "../data";
 import { isLocalHost, type SmtpSettings } from "./providers";
 import { hasFormatting, replyHtml, replyText } from "./format";
+import type { Login } from "./imap";
 
 const address = (c: Contact) => ({ name: c.name && c.name !== c.email ? c.name : "", address: c.email });
 
@@ -49,7 +50,7 @@ export async function compose(m: Message, original?: Message, files: OutgoingFil
   return mail.build();
 }
 
-function transport(s: SmtpSettings, password: string) {
+function transport(s: SmtpSettings, login: Login) {
   return nodemailer.createTransport({
     host: s.host,
     port: s.port,
@@ -57,7 +58,7 @@ function transport(s: SmtpSettings, password: string) {
     // Without TLS from the start, STARTTLS is required: passwords never go in the clear (except to this machine).
     requireTLS: !s.secure && !isLocalHost(s.host),
     ignoreTLS: !s.secure && isLocalHost(s.host),
-    auth: { user: s.user, pass: password },
+    auth: "pass" in login ? { user: s.user, pass: login.pass } : { type: "OAuth2", user: s.user, accessToken: login.accessToken },
     connectionTimeout: 20_000,
     greetingTimeout: 15_000,
   });
@@ -78,8 +79,8 @@ export function explainSmtp(e: unknown, s: SmtpSettings): string {
 }
 
 /** Logs in to the SMTP server once, for the Add account form; throws a readable error. */
-export async function checkSmtp(s: SmtpSettings, password: string): Promise<void> {
-  const t = transport(s, password);
+export async function checkSmtp(s: SmtpSettings, login: Login): Promise<void> {
+  const t = transport(s, login);
   try {
     await t.verify();
   } catch (e) {
@@ -90,8 +91,8 @@ export async function checkSmtp(s: SmtpSettings, password: string): Promise<void
 }
 
 /** Sends the bytes to the message's recipients; throws a readable error. */
-export async function send(s: SmtpSettings, password: string, m: Message, raw: Buffer): Promise<void> {
-  const t = transport(s, password);
+export async function send(s: SmtpSettings, login: Login, m: Message, raw: Buffer): Promise<void> {
+  const t = transport(s, login);
   try {
     await t.sendMail({ envelope: { from: m.from.email, to: recipients(m).map((c) => c.email) }, raw });
   } catch (e) {

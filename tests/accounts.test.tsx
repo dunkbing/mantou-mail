@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createMail, type Mail } from "../src/state";
-import { imapServer, until } from "./server";
+import { imapServer, oauthServer, until } from "./server";
 import { glyph } from "../src/ui/icons";
 
 const cleanup: (() => Promise<void> | void)[] = [];
@@ -239,4 +239,61 @@ test("the system's dialogs: attach with the file dialog, save an attachment wher
   for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
   expect(mail.draft().attachments!.length).toBe(2);
   expect(inputs(h).length).toBe(fields);
+});
+
+test("a Gmail address signs in with Google in the browser; an app password is still an option", async () => {
+  const server = await imapServer({ inbox: [{ from: "Priya Shah <priya@example.com>", subject: "Onboarding review", body: "Thursday?" }] });
+  cleanup.push(() => server.close());
+  const o = oauthServer({ email: "sam.rivera@gmail.com", onToken: (t) => server.setAccessToken(t) });
+  cleanup.push(o.close);
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  let opened = "";
+  const remote = new Remote(store, memorySecrets(), { dialogs: true, oauth: { google: o.provider }, openUrl: async (url) => void (opened = url) });
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  await remote.attach(mail);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  mount(h.ui, () => <App mail={mail} remote={remote} />);
+  h.step();
+  h.press(text(h, "Add your account"));
+  h.type("sam.rivera@gmail.com");
+  expect(texts(h)).toContain("ADD A GOOGLE ACCOUNT");
+  expect(texts(h)).not.toContain("STARTTLS"); // no password or server fields
+  const before = inputs(h).length;
+  h.press(text(h, "Use an app password"));
+  expect(inputs(h).length).toBeGreaterThan(before); // the password form
+  expect(texts(h)).toContain("ADD AN IMAP ACCOUNT");
+  h.press(text(h, "Sign in with Google"));
+  expect(texts(h)).toContain("ADD A GOOGLE ACCOUNT");
+  // The test servers stand in for Gmail's (the dialog would use imap.gmail.com).
+  remote.signInAndAdd = ((add) => (email: string, opts: object = {}) => add(email, { ...opts, imap: server.settings, smtp: server.smtp.settings }))(remote.signInAndAdd.bind(remote));
+  h.press(text(h, "Sign in with Google"));
+  await until(() => !!opened, "the browser to open", () => h.step());
+  expect(texts(h)).toContain("Waiting for the browser…");
+  expect(texts(h)).toContain("Finish signing in in your browser.");
+  await o.browser(opened); // the person signs in
+  await until(() => texts(h).includes("sam.rivera@gmail.com is up to date"), "the first sync", () => h.step());
+  expect(mail.accounts().map((a) => a.email)).toEqual(["sam.rivera@gmail.com"]);
+  expect(texts(h)).not.toContain("Waiting for the browser…");
+});
+
+test("without a Google client id, a Gmail address uses an app password", async () => {
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { oauth: { google: null } });
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  await remote.attach(mail);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  mount(h.ui, () => <App mail={mail} remote={remote} />);
+  h.step();
+  h.press(text(h, "Add your account"));
+  h.type("sam.rivera@gmail.com");
+  expect(texts(h)).toContain("ADD AN IMAP ACCOUNT");
+  expect(texts(h).some((t) => t.startsWith("Gmail over IMAP needs an app password"))).toBe(true);
 });

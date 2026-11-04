@@ -10,8 +10,9 @@ import { Blobs } from "./blobs";
 import type { MessageOptions } from "mantou-ui";
 import { confirm, downloadsDir, freeName, hasDialogs, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
-import { AccountSync, checkLogin, type SyncStatus } from "./imap";
-import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
+import { AccountSync, checkLogin, type Login, type SyncStatus } from "./imap";
+import { guessSettings, guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
+import { OAuthError, google, oauthFor, refresh, signIn, type OAuthProvider, type OAuthProviderId, type Tokens } from "./oauth";
 import { checkSmtp, compose, send as sendSmtp } from "./smtp";
 import type { Secrets } from "./secrets";
 import type { AccountConfig, Store } from "./store";
@@ -21,7 +22,9 @@ export const UNDO_SEND_MS = 10_000;
 
 export interface NewAccount {
   email: string;
-  password: string;
+  /** Its password, or (signed in with a provider) its tokens. */
+  password?: string;
+  oauth?: { provider: OAuthProviderId; tokens: Tokens & { refreshToken: string } };
   imap: ImapSettings;
   /** Where mail is sent (default: guessed from the address). */
   smtp?: SmtpSettings;
@@ -47,6 +50,8 @@ export class Remote {
   constructor(readonly store: Store, readonly secrets: Secrets, private options: {
       expungeDelay?: number;
       window?: number;
+      /** The first wait before an account connects again (default 2 s). */
+      retry?: number;
       undoSend?: number;
       /** Where attachments' bytes are kept (default: a folder in the system's temp folder). */
       blobs?: Blobs;
@@ -55,6 +60,9 @@ export class Remote {
       open?: (path: string) => void;
       /** Whether the system's dialogs can be shown (default: a guess, see hasDialogs). */
       dialogs?: boolean;
+      /** The providers accounts can sign in with (default: the app's, see oauth.ts), and what opens their sign-in page (default: the system's browser). */
+      oauth?: { google?: OAuthProvider | null };
+      openUrl?: (url: string) => void | Promise<void>;
     } = {},) {
     this.lastId = store.maxId();
     this.blobs = options.blobs ?? new Blobs(join(tmpdir(), "mantou-mail-attachments"));
@@ -75,14 +83,10 @@ export class Remote {
     this.statusSignal[1]({ ...this.statuses(), [id]: s });
   }
 
-  /** Connects the app's state, and starts syncing every account that has its password. */
+  /** Connects the app's state, and starts syncing every account (one without its password or sign-in says so). */
   async attach(mail: Mail) {
     this.mail = mail;
-    for (const a of this.accounts()) {
-      const password = await this.secrets.get(a.id);
-      if (password) this.start(a, password);
-      else this.setStatus(a.id, { state: "needs-password", detail: `Enter the password for ${a.email} to sync it` });
-    }
+    for (const a of this.accounts()) this.start(a);
     // What was in the outbox when the app last stopped goes now.
     for (const m of mail.messages()) if (m.outbox && this.isReal(m.account)) this.queueSend(m, 0); // and scheduled ones at their time
   }
@@ -122,14 +126,21 @@ export class Remote {
     if (!mail || !m?.outbox || (m.folder !== "sent" && m.folder !== "scheduled")) return;
     const late = m.outbox.at && now().getTime() - Date.parse(m.outbox.at) > 60_000 ? m.outbox.at : undefined;
     const cfg = this.accounts().find((a) => a.id === m.account);
-    const password = cfg && (await this.secrets.get(cfg.id));
+    let login: Login | null = null;
+    let why = "the account's password is needed";
+    try {
+      login = cfg ? await this.loginOf(cfg) : null;
+      if (cfg?.oauth && !login) why = `sign in to ${cfg.email} again`;
+    } catch (e) {
+      why = (e as Error).message;
+    }
     const names = recipients(m).map((c) => c.name).join(", ");
     const fail = (why: string) => {
       mail.backToDrafts(id);
       this.store.put(mail.messages().filter((x) => x.id === id));
       mail.note(`Couldn't send “${m.subject}”: ${why}. It's in Drafts.`);
     };
-    if (!cfg || !password) return fail("the account's password is needed");
+    if (!cfg || !login) return fail(why);
     const smtp = cfg.smtp ?? { ...guessSmtp(cfg.email), user: cfg.imap.user };
     const original = m.outbox.replyTo === undefined ? undefined : mail.messages().find((x) => x.id === m.outbox!.replyTo);
     let raw: Buffer;
@@ -140,7 +151,7 @@ export class Remote {
       raw = await compose(out, original, files);
       // The copy filed in Sent keeps the Bcc line, so you can see who got it.
       sentCopy = m.bcc?.length ? await compose(out, original, files, { keepBcc: true }) : raw;
-      await sendSmtp(smtp, password, m, raw);
+      await sendSmtp(smtp, login, m, raw);
     } catch (e) {
       return fail((e as Error).message);
     }
@@ -222,9 +233,68 @@ export class Remote {
     return this.lastId;
   };
 
-  private start(a: AccountConfig, password: string): AccountSync {
+  // ------------------------------------------------------------ logging in
+
+  /** Access tokens of accounts that sign in with a provider, by account id (in memory only). */
+  private tokens = new Map<string, Tokens>();
+
+  private providers() {
+    return this.options.oauth ?? { google: google() };
+  }
+  /** The provider an account signs in with, configured or guessed from its address (null: it uses a password). */
+  providerOf(account: { oauth?: OAuthProviderId; email: string }): OAuthProvider | null {
+    if (account.oauth) return this.providers()[account.oauth] ?? null;
+    return oauthFor(account.email, this.providers());
+  }
+
+  /**
+   * How an account logs in now: its password, or an access token (refreshed
+   * when it's about to run out, or when `renew`). Null when the password or a
+   * new sign-in is needed. Throws when the provider can't be reached.
+   */
+  async loginOf(cfg: AccountConfig, renew = false): Promise<Login | null> {
+    const secret = await this.secrets.get(cfg.id);
+    if (!secret) return null;
+    if (!cfg.oauth) return { pass: secret };
+    const p = this.providerOf(cfg);
+    if (!p) return null;
+    const cached = this.tokens.get(cfg.id);
+    if (cached && !renew && cached.expiresAt - Date.now() > 60_000) return { accessToken: cached.accessToken };
+    try {
+      const t = await refresh(p, secret);
+      this.tokens.set(cfg.id, t);
+      if (t.refreshToken && t.refreshToken !== secret) await this.secrets.set(cfg.id, t.refreshToken);
+      return { accessToken: t.accessToken };
+    } catch (e) {
+      if (e instanceof OAuthError && e.revoked) return null;
+      throw e;
+    }
+  }
+
+  /**
+   * Signs in with the address's provider in the browser, then adds the account
+   * (or, already added, renews its sign-in). `signal` cancels the wait.
+   */
+  async signInAndAdd(email: string, opts: { sender?: string; signal?: AbortSignal; imap?: ImapSettings; smtp?: SmtpSettings } = {}): Promise<AccountConfig> {
+    const p = this.providerOf({ email });
+    if (!p) throw new Error(`Mantou Mail can't sign in to ${email} with its provider; use a password`);
+    const got = await signIn(p, { loginHint: email.trim() || undefined, open: this.options.openUrl, signal: opts.signal });
+    const wanted = email.trim().toLowerCase();
+    if (wanted && got.email.toLowerCase() !== wanted) throw new Error(`You signed in as ${got.email}, not ${email.trim()}`);
+    const existing = this.accounts().find((a) => a.id === got.email.toLowerCase());
+    return this.addAccount({
+      email: got.email,
+      oauth: { provider: p.id, tokens: got },
+      imap: opts.imap ?? existing?.imap ?? guessSettings(got.email),
+      smtp: opts.smtp ?? existing?.smtp,
+      sender: opts.sender,
+    });
+  }
+
+  private start(a: AccountConfig): AccountSync {
     this.syncs.get(a.id)?.stop();
-    const sync = new AccountSync(a, password, {
+    const sync = new AccountSync(a, {
+      login: (renew) => this.loginOf(a, renew),
       store: this.store,
       newId: this.newId,
       onMessages: (account, list) => {
@@ -237,6 +307,7 @@ export class Remote {
       onStatus: (account, s) => this.setStatus(account, s),
       expungeDelay: this.options.expungeDelay,
       window: this.options.window,
+      retry: this.options.retry,
       onOlder: (account, folder, count) => {
         const key = `${account}:${folder}`;
         if (this.olderSignal[0]()[key] !== count) this.olderSignal[1]({ ...this.olderSignal[0](), [key]: count });
@@ -284,11 +355,12 @@ export class Remote {
     if (gone.length) this.store.remove(gone);
   };
 
-  /** Checks the login, saves the account and its password, and starts syncing it. */
+  /** Checks the login, saves the account and its password (or refresh token), and starts syncing it. */
   async addAccount(n: NewAccount): Promise<AccountConfig> {
     const smtp = n.smtp ?? { ...guessSmtp(n.email), user: n.imap.user };
-    await checkLogin(n.imap, n.password);
-    await checkSmtp(smtp, n.password);
+    const login: Login = n.oauth ? { accessToken: n.oauth.tokens.accessToken } : { pass: n.password ?? "" };
+    await checkLogin(n.imap, login);
+    await checkSmtp(smtp, login);
     const email = n.email.trim();
     const id = email.toLowerCase();
     const existing = this.accounts().find((a) => a.id === id);
@@ -299,12 +371,15 @@ export class Remote {
       sender: n.sender?.trim() || existing?.sender || email.split("@")[0],
       imap: n.imap,
       smtp,
+      ...(n.oauth ? { oauth: n.oauth.provider } : {}),
     };
     this.store.saveAccount(cfg);
     this.listSignal[1](this.accounts());
-    await this.secrets.set(id, n.password);
+    await this.secrets.set(id, n.oauth ? n.oauth.tokens.refreshToken : (n.password ?? ""));
+    if (n.oauth) this.tokens.set(id, n.oauth.tokens);
+    else this.tokens.delete(id);
     this.mail?.setAccounts(this.accounts(), this.store.messages());
-    this.start(cfg, n.password);
+    this.start(cfg);
     return cfg;
   }
 
@@ -315,6 +390,7 @@ export class Remote {
     this.store.removeAccount(id);
     this.listSignal[1](this.accounts());
     await this.secrets.delete(id).catch(() => {});
+    this.tokens.delete(id);
     const { [id]: _, ...rest } = this.statuses();
     this.statusSignal[1](rest);
     const left = this.accounts();

@@ -22,8 +22,8 @@ export interface Provider {
 }
 
 const PROVIDERS: [RegExp, Provider][] = [
-  [/^(gmail|googlemail)\.com$/, { name: "Gmail", host: "imap.gmail.com", smtp: { host: "smtp.gmail.com", port: 465 }, passwordHint: "Gmail needs an app password: Google Account › Security › 2-Step Verification › App passwords." }],
-  [/^(outlook|hotmail|live|msn)\.[a-z.]+$/, { name: "Outlook", host: "outlook.office365.com", smtp: { host: "smtp-mail.outlook.com", port: 587 }, passwordHint: "Outlook.com may need an app password: Microsoft account › Security › Advanced security options." }],
+  [/^(gmail|googlemail)\.com$/, { name: "Gmail", host: "imap.gmail.com", smtp: { host: "smtp.gmail.com", port: 465 }, passwordHint: "Gmail over IMAP needs an app password (Google Account › Security › 2-Step Verification › App passwords), unless you sign in with Google." }],
+  [/^(outlook|hotmail|live|msn)\.[a-z.]+$/, { name: "Outlook", host: "outlook.office365.com", smtp: { host: "smtp-mail.outlook.com", port: 587 }, passwordHint: "Outlook.com and Microsoft 365 no longer take passwords from mail apps, only signing in with Microsoft, which Mantou Mail can't do yet." }],
   [/^(icloud|me|mac)\.com$/, { name: "iCloud", host: "imap.mail.me.com", smtp: { host: "smtp.mail.me.com", port: 587 }, passwordHint: "iCloud needs an app-specific password: appleid.apple.com › Sign-In and Security." }],
   [/^(yahoo|ymail)\.[a-z.]+$/, { name: "Yahoo", host: "imap.mail.yahoo.com", smtp: { host: "smtp.mail.yahoo.com", port: 465 }, passwordHint: "Yahoo needs an app password: Account security › Generate app password." }],
   [/^aol\.com$/, { name: "AOL", host: "imap.aol.com", smtp: { host: "smtp.aol.com", port: 465 }, passwordHint: "AOL needs an app password: Account security › Generate app password." }],
