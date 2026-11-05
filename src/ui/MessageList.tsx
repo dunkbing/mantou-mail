@@ -1,5 +1,5 @@
 // The message list: a row per message, scrolled with the wheel.
-import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, useUi, useWindowSize, type Node, type PointerEvent } from "mantou-ui";
+import { List, Show, Text, View, createEffect, createMemo, createSignal, on, untrack, useUi, type ListHandle, type PointerEvent } from "mantou-ui";
 import { daysSince, now, shortDate, type Message } from "../data";
 import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
@@ -39,15 +39,28 @@ const MENU_GRACE = 350;
 /** How long the selection has to be drawn before a context menu opens (ms). */
 const MENU_DELAY = 60;
 
-export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void; onMenu: (message: Message, e: PointerEvent) => void }) {
+/** In mixed lists (labels, starred, search), where a message lives. */
+const folderOf = (mail: Mail, msg: Message) => (mail.mailbox().kind === "folder" ? undefined : FOLDER_NAMES[msg.folder]);
+
+/** Whether a row shows a line of chips (labels, Draft, Sending…, Waiting for reply…). */
+export const hasChips = (mail: Mail, msg: Message) =>
+  msg.labels.length > 0 || !!msg.waitingSince || !!msg.snoozedUntil || !!folderOf(mail, msg) || msg.folder === "drafts" || !!msg.outbox;
+
+/**
+ * A row's height with its separator, in px: three lines of text, and the chips'
+ * line when it has one (on one line: what doesn't fit is cut). <List> places
+ * rows by these; a test measures the rows to keep them true.
+ */
+export const ROW_HEIGHT = 78, ROW_WITH_CHIPS = 105;
+export const rowHeight = (mail: Mail, msg: Message) => (hasChips(mail, msg) ? ROW_WITH_CHIPS : ROW_HEIGHT);
+
+export function Row(props: { mail: Mail; message: Message; onMenu: (message: Message, e: PointerEvent) => void }) {
   const msg = () => props.message;
   const selected = () => props.mail.selected()?.id === msg().id || props.mail.picked().has(msg().id);
   const size = () => props.mail.threadSize(msg());
-  /** In mixed lists (labels, starred, search), where a message lives. */
-  const folder = () => (props.mail.mailbox().kind === "folder" ? undefined : FOLDER_NAMES[msg().folder]);
+  const folder = () => folderOf(props.mail, msg());
   return (
     <View
-      ref={props.ref}
       style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : C.surface }}
       onPointerDown={(e) => (held = e.button !== 0 ? null : e.shift ? "range" : e.ctrl || e.meta ? "toggle" : null)}
       onPress={() => {
@@ -77,8 +90,8 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
         </View>
         <Text style={{ fontSize: 13, fontWeight: msg().unread ? 600 : 400, color: C.text, maxLines: 1 }}>{msg().subject || "(no subject)"}</Text>
         <Text style={{ fontSize: 12, color: C.secondary, maxLines: 1 }}>{msg().body.join(" ").replace(/\s+/g, " ")}</Text>
-        <Show when={msg().labels.length > 0 || msg().waitingSince || msg().snoozedUntil || folder() || msg().folder === "drafts" || msg().outbox}>
-          <View style={{ flexDirection: "row", gap: 6, paddingTop: 4, flexWrap: "wrap" }}>
+        <Show when={hasChips(props.mail, msg())}>
+          <View style={{ flexDirection: "row", gap: 6, paddingTop: 4, overflow: "hidden" }}>
             <Show when={msg().folder === "drafts"}>
               <Chip text="Draft" color={C.danger} background={C.dangerSoft} />
             </Show>
@@ -134,15 +147,6 @@ export function EmptyList(props: { mail: Mail }) {
   );
 }
 
-/**
- * Rows are rendered a page at a time, more as the scroll nears the end of
- * what's rendered (and always as far as the selection). Workaround for
- * dunkbing/mantou#50: <List> takes rows of different heights since 0.1.7
- * (#31), but throws when its items get fewer, which archiving does. Rendering
- * every row of a big mailbox costs about 8 nodes and 53 ops a row.
- */
-export const PAGE = 60;
-
 /** At the end of a real folder's list: what the server has beyond what's kept. */
 function LoadOlder(props: { mail: Mail; remote: Remote }) {
   const [loading, setLoading] = createSignal(false);
@@ -165,11 +169,14 @@ function LoadOlder(props: { mail: Mail; remote: Remote }) {
   );
 }
 
+/** The end of a real folder's list, as an item of the list. */
+const OLDER = "older" as const;
+const OLDER_HEIGHT = 52;
+
 export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id: string) => void }) {
   const m = props.mail;
   const ui = useUi();
-  let list: Node | undefined;
-  const size = useWindowSize();
+  let list: ListHandle | undefined;
   // A right click (or Control + click) selects the row (unless it's one of several picked), then asks what to do with it: its commands are the app menu's.
   const menu = (msg: Message, e: PointerEvent) => {
     if (!m.picked().has(msg.id)) m.select(msg.id); // on one of several picked rows, the menu is for all of them
@@ -183,49 +190,40 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
     if (menus.native) setTimeout(ask, MENU_DELAY);
     else ask();
   };
-  const rows = new Map<number, Node>();
-  const [limit, setLimit] = createSignal(PAGE);
-  // The scroll's offset and sizes as the core last reported them.
-  const at = { offset: 0, viewport: 0, content: 0 };
-  const shown = createMemo(() => {
-    const all = m.list(), s = m.selected();
-    const at = s ? all.indexOf(s) : -1;
-    return all.slice(0, Math.max(limit(), at + 1 + PAGE / 4));
+  // Rows exist only for what's in view (and a few more): a mailbox of any size costs the same.
+  const items = createMemo((): (Message | typeof OLDER)[] => {
+    const all = m.list();
+    return props.remote && all.length && props.remote.olderCount(m.mailbox()) > 0 ? [...all, OLDER] : all;
   });
-  /** Within two screens of the end of what's rendered: render another page. Checked when the core reports a scroll or a new size, so the sizes are current. */
-  const more = () => {
-    if (at.content > 0 && shown().length < m.list().length && at.offset + 2 * at.viewport >= at.content) setLimit(shown().length + PAGE);
-  };
-  createEffect(on([m.mailbox, m.tab], () => {
-    setLimit(PAGE);
-    at.offset = 0;
-    list?.scrollTo({ y: 0 });
-  }));
+  createEffect(on([m.mailbox, m.tab], () => list && !list.node.released && list.node.scrollTo({ y: 0 }), { defer: true }));
   // Keep the selected row in view.
   createEffect(() => {
     const s = m.selected();
-    const row = s && rows.get(s.id);
-    if (row && !row.released) row.scrollIntoView({ block: "nearest" });
+    const i = s ? m.list().indexOf(s) : -1;
+    // Untracked: scrollToIndex reads where the list is scrolled, and the wheel would bring the row back each time.
+    if (i >= 0 && list && !list.node.released) untrack(() => list!.scrollToIndex(i));
   });
   return (
-    <Scroll ref={(n) => (list = n)} style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }} onScroll={(o) => ((at.offset = o.y), more())} onLayout={(r) => ((at.viewport = r.height), more())}>
-      <View onLayout={(r) => ((at.content = r.height), more())}>
-        <For each={shown()} fallback={<EmptyList mail={m} />}>
-          {(msg) => {
-            let node: Node | undefined;
-            onCleanup(() => rows.get(msg.id) === node && rows.delete(msg.id));
-            return (
-              <>
-                <Row mail={m} message={msg} onMenu={menu} ref={(n) => rows.set(msg.id, (node = n))} />
-                <View style={[hline(), { marginLeft: 58, backgroundColor: C.faint }]} />
-              </>
-            );
-          }}
-        </For>
-        <Show when={props.remote && shown().length === m.list().length && props.remote.olderCount(m.mailbox()) > 0}>
-          <LoadOlder mail={m} remote={props.remote!} />
-        </Show>
-      </View>
-    </Scroll>
+    <Show when={m.list().length > 0} fallback={<View style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }}><EmptyList mail={m} /></View>}>
+      <List
+        each={items()}
+        itemHeight={(it) => (it === OLDER ? OLDER_HEIGHT : rowHeight(m, it))}
+        ref={(l) => (list = l)}
+        style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }}
+      >
+        {(item) => {
+          // Workaround for dunkbing/mantou#80: a row whose item has just gone reads it as undefined once
+          // before the list disposes it; it keeps its last one instead.
+          // (Read untracked here: the list runs this function in a tracked scope, which would remake the row.)
+          const it = createMemo<Message | typeof OLDER>((last) => item() ?? last, untrack(item));
+          return (
+            <Show when={it() !== OLDER} fallback={<LoadOlder mail={m} remote={props.remote!} />}>
+              <Row mail={m} message={it() as Message} onMenu={menu} />
+              <View style={[hline(), { marginLeft: 58, backgroundColor: C.faint }]} />
+            </Show>
+          );
+        }}
+      </List>
+    </Show>
   );
 }

@@ -6,7 +6,7 @@ import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
 import { createMail, formatContacts, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../src/state";
 import { sampleMessages } from "../src/data";
-import { PAGE } from "../src/ui/MessageList";
+import { rowHeight } from "../src/ui/MessageList";
 import { menus } from "../src/ui/PopupMenu";
 
 const open: HeadlessCore[] = [];
@@ -36,7 +36,18 @@ function text(h: HeadlessCore, content: string, nth = 0): Node {
   return found[nth];
 }
 const inputs = (h: HeadlessCore) => [...h.ui.nodes.values()].filter((n) => n.isInput).sort((a, b) => h.rect(a)![1] - h.rect(b)![1] || h.rect(a)![0] - h.rect(b)![0]);
-const readerSubject = (h: HeadlessCore, mail: Mail) => text(h, mail.selected()!.subject, 1); // [0] is the list row
+/** A text in the message list (left of x 629), or in the reader (right of it): the same subject can be in both. */
+function inList(h: HeadlessCore, content: string): Node {
+  const found = [...h.ui.nodes.values()].find((n) => n.isText && n.textContent === content && h.rect(n) && h.rect(n)![2] <= 629);
+  if (!found) throw new Error(`no "${content}" in the list`);
+  return found;
+}
+function inReader(h: HeadlessCore, content: string): Node {
+  const found = [...h.ui.nodes.values()].find((n) => n.isText && n.textContent === content && h.rect(n) && h.rect(n)![0] > 629);
+  if (!found) throw new Error(`no "${content}" in the reader`);
+  return found;
+}
+const readerSubject = (h: HeadlessCore, mail: Mail) => inReader(h, mail.selected()!.subject);
 
 test("opens on the Important tab of all inboxes, newest first, with the first message in the reader", () => {
   const { h, mail } = app();
@@ -87,7 +98,7 @@ test("the Other tab holds newsletters and notifications", () => {
 
 test("the wheel scrolls the list, and the selection stays in view", () => {
   const { h, mail } = app();
-  const row = text(h, "Onboarding flow: final review before Thursday");
+  const row = inList(h, "Onboarding flow: final review before Thursday");
   const y0 = h.rect(row)![1];
   h.wheel(400, 400, 120);
   expect(h.rect(row)![1]).toBeCloseTo(y0 - 120, 0);
@@ -376,11 +387,11 @@ test("scrolling moves only the list: the status bar stays put, and the scrollbar
   expect(thumb).toBeDefined();
 });
 
-test("a big mailbox renders a page of rows at a time: more as the scroll nears the end, and always the selection", () => {
+test("a big mailbox keeps rows only for what's in view: the wheel and the selection bring theirs", () => {
   const h = new HeadlessCore({ width: 1200, height: 760 });
   open.push(h);
   const base = sampleMessages().filter((m) => m.folder === "inbox" && m.important);
-  const many = Array.from({ length: 300 }, (_, i) => ({ ...base[i % base.length], id: i + 1, thread: undefined, subject: `Message ${i + 1}`, date: new Date(Date.UTC(2026, 10, 3) - i * 3_600_000) }));
+  const many = Array.from({ length: 2000 }, (_, i) => ({ ...base[i % base.length], id: i + 1, thread: undefined, subject: `Message ${i + 1}`, date: new Date(Date.UTC(2026, 10, 3) - i * 3_600_000) }));
   let mail!: Mail;
   mount(h.ui, () => {
     mail = createMail(many);
@@ -388,15 +399,30 @@ test("a big mailbox renders a page of rows at a time: more as the scroll nears t
   });
   h.step();
   const rendered = () => texts(h).filter((t) => /^Message \d+$/.test(t)).length - 1; // the reader shows the selected one too
-  expect(rendered()).toBe(PAGE);
+  expect(rendered()).toBeLessThan(20);
+  expect(texts(h)).not.toContain("Message 200");
   for (let i = 0; i < 30; i++) h.wheel(400, 400, 600);
-  expect(rendered()).toBeGreaterThan(PAGE);
+  expect(rendered()).toBeLessThan(20);
+  expect(texts(h)).not.toContain("Message 2");
   for (let i = 0; i < 200; i++) h.key("j");
   expect(mail.selected()!.subject).toBe("Message 201");
   expect(texts(h).filter((t) => t === "Message 201").length).toBe(2); // its row is there, with the reader
+  const row = h.rect(inList(h, "Message 201"))!;
+  expect(row[1]).toBeGreaterThan(53); // in view, under the toolbar
+  expect(row[3]).toBeLessThan(731); // above the status bar
   h.key("2");
   h.key("1");
-  expect(rendered()).toBe(PAGE); // a new mailbox starts again from one page
+  expect(texts(h)).toContain("Message 1"); // a new mailbox starts at the top
+});
+
+test("rows are as tall as the list places them (ROW_HEIGHT, ROW_WITH_CHIPS)", () => {
+  const { h, mail } = app();
+  for (const msg of mail.list()) {
+    const t = [...h.ui.nodes.values()].find((n) => n.isText && n.textContent === (msg.subject || "(no subject)") && h.rect(n)![2] <= 629);
+    if (!t || h.rect(t)![1] > 731) continue; // not in view
+    const [, top, , bottom] = h.rect(t.parent!.parent!)!; // subject → its column → the row
+    expect(bottom - top + 1).toBe(rowHeight(mail, msg)); // and the 1 px rule under it
+  }
 });
 
 test("a right click on a row selects it and opens a menu of what to do with it (the system's, on macOS)", async () => {
@@ -422,8 +448,8 @@ test("a right click on one of several picked rows keeps them, and the menu archi
   mail.pick(mail.list()[2].id, true);
   h.step();
   const ids = [...mail.picked()];
-  const [x, y] = h.rect(text(h, mail.list()[1].subject))!;
-  h.pointerButton("down", 2, x + 10, y + 5);
+  const [x, y] = h.rect(inList(h, mail.list()[1].subject))!;
+  h.pointerButton("down", 2, x + 10, y + 5).pointerButton("up", 2, x + 10, y + 5);
   await Bun.sleep(100); // the menu opens once the selection is drawn
   expect([...mail.picked()]).toEqual(ids); // still picked
   h.chooseMenu("archive");
@@ -432,8 +458,8 @@ test("a right click on one of several picked rows keeps them, and the menu archi
   // and on a row that isn't picked, the pick ends and that row is selected
   mail.pick(mail.list()[1].id, true);
   const other = mail.list()[3];
-  const [ox, oy] = h.rect(text(h, other.subject))!;
-  h.pointerButton("down", 2, ox + 10, oy + 5);
+  const [ox, oy] = h.rect(inList(h, other.subject))!;
+  h.pointerButton("down", 2, ox + 10, oy + 5).pointerButton("up", 2, ox + 10, oy + 5);
   await Bun.sleep(100); // the menu opens once the selection is drawn
   expect(mail.picked().size).toBe(0);
   expect(mail.selected()!.id).toBe(other.id);
@@ -525,7 +551,7 @@ test("the click that dismisses a context menu doesn't select the row under it", 
   const { h, mail } = app();
   const [a, b] = [mail.list()[0], mail.list()[3]];
   mail.select(a.id);
-  const [x, y] = h.rect(text(h, mail.list()[1].subject))!;
+  const [x, y] = h.rect(inList(h, mail.list()[1].subject))!;
   h.pointerButton("down", 2, x + 10, y + 5);
   await Bun.sleep(100); // the menu opens once the selection is drawn
   expect(mail.selected()!.id).toBe(mail.list()[1].id);
