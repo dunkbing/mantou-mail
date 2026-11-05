@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Linux: Mantou Mail comes as a .deb and as a .tar.gz with an install script, with its own icon and an entry in the applications menu.
 - Big mailboxes scroll and switch faster: the message list only draws the rows in view (2,000 messages: about a third of the work to open, a tenth to switch mailboxes).
 - Linux: right-clicking a message opens its menu (reply, archive, snooze, label and the rest), drawn by the app; arrow keys, Enter and Esc work in it.
 - Linux: the app follows the desktop's light or dark appearance (GNOME, KDE and others), and changes with it.

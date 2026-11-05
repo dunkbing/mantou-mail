@@ -13,8 +13,8 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 | `src/mail/` | Real accounts: `remote` (accounts, passwords, the outbox, the bridge to the state), `imap` (one account's sync over IMAP, with imapflow), `smtp` (sending: the message as RFC 822, with nodemailer), `format` (what a message says as sent: the quoted original, and HTML from the Markdown people type), `store` (the local copy, SQLite: messages, changes not yet on the server, how much of each folder is kept), `parse` (raw mail to `Message`; attachments from the MIME structure), `blobs` (attachments' bytes on disk, by hash), `files` (Downloads, opening with the system's app, Mantou's file dialogs and message box, and whether the system can show them), `providers` (settings guessed from an address, and how to get each provider's app password), `oauth` (signing in with Google or Microsoft: the browser, a loopback port, PKCE, refresh tokens, company domains by MX; docs/oauth.md), `secrets` (the OS keychain: passwords and refresh tokens), `paths` (the data folder) |
 | `src/main.tsx` | Entry: the store, the accounts, then `run(() => <App />)` |
 | `tests/` | Bun tests on a headless instance of Mantou's real core; real accounts against IMAP and SMTP servers in the test process (`tests/server.ts`: hoodiecrow, smtp-server, and a stand-in for Google's and Microsoft's OAuth endpoints) |
-| `scripts/` | `demo-server`: IMAP and SMTP servers with the sample mail, to try real accounts locally; `subset-icons.py`: remakes the icon font; `fake-portal.py`: a stand-in desktop portal, to check dark mode on Linux without a desktop |
-| `assets/` | Files the app reads at run time, imported `with { type: "file" }` so `bun run build` embeds them: the icon font |
+| `scripts/` | `demo-server`: IMAP and SMTP servers with the sample mail, to try real accounts locally; `subset-icons.py`: remakes the icon font; `fake-portal.py`: a stand-in desktop portal, to check dark mode on Linux without a desktop; `package-linux.ts` (`bun run package:linux`) and `icon-png.tsx` (the icon's PNGs, drawn by Mantou) |
+| `assets/` | Files the app reads at run time, imported `with { type: "file" }` so `bun run build` embeds them: the icon font; and the app's icon (`icon.svg`) for packages |
 | `bench/` | `bun run perf`: what the common interactions cost (time, ops, layouts, nodes), sample and 2,000-message mailboxes; results in `docs/performance.md` |
 | `docs/upstream.md` | What the app needs from Mantou: the issues filed (and drafts of any not yet filed), with the workaround in use |
 
@@ -24,6 +24,7 @@ Guide for coding agents (and people) working on Mantou Mail: a desktop mail clie
 bun install          # mantou-ui from npm, pinned in package.json / bun.lock, with a prebuilt native core
 bun run dev          # the app in a window (on headless Linux: xvfb-run -a bun run dev)
 bun run build        # one executable in dist/, Mantou's core beside it
+bun run package:linux  # Linux: a .deb and a .tar.gz with install.sh, the icon and the .desktop entry, in dist/
 bun run demo-server  # IMAP on 127.0.0.1:1143 and SMTP on :1025 with the sample mail (testuser / testpass)
 bun test             # headless tests (captures need a GPU adapter; Mesa's lavapipe is fine)
 bun run typecheck    # bun check

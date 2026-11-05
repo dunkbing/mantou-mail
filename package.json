@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "mantou run src/main.tsx",
     "build": "mantou build src/main.tsx --name mantou-mail",
+    "package:linux": "bun scripts/package-linux.ts",
     "test": "bun test",
     "typecheck": "bun check",
     "demo-server": "bun scripts/demo-server.ts",
