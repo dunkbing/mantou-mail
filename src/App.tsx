@@ -14,6 +14,7 @@ import { StatusBar } from "./ui/StatusBar";
 import { Accounts } from "./ui/Accounts";
 import type { Remote } from "./mail/remote";
 import { APP_MENU, type Command } from "./ui/menu";
+import { PopupHost, popupOpen } from "./ui/PopupMenu";
 
 export function App(props: { mail?: Mail; remote?: Remote }) {
   const m = props.mail ?? createMail();
@@ -59,6 +60,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   onCleanup(ui.onMenu(runCommand));
   onKey((e) => {
     if (e.type !== "keyDown") return;
+    if (popupOpen(ui)) return; // a drawn context menu has the keys (src/ui/PopupMenu.tsx)
     if (accounts()) {
       if (e.key === "Escape") setAccounts(false);
       return; // the dialog's fields have the keys they use
@@ -147,6 +149,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
       <Show when={help()}>
         <Shortcuts onClose={() => setHelp(false)} />
       </Show>
+      <PopupHost />
     </View>
   );
 }

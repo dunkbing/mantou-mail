@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Linux: right-clicking a message opens its menu (reply, archive, snooze, label and the rest), drawn by the app; arrow keys, Enter and Esc work in it.
+- Linux: the app follows the desktop's light or dark appearance (GNOME, KDE and others), and changes with it.
 - Right-clicking a message selects it at once, before the menu opens (it used to be selected only after the menu was closed).
 - Web links in messages are underlined and open in your browser when clicked.
 - Updated Mantou to 0.3.1: rich text (the links), and fixes that let the app drop its workarounds for the menu bar, the Edit menu's shortcuts and the right-click menu's position.

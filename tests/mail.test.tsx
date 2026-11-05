@@ -7,9 +7,14 @@ import { App } from "../src/App";
 import { createMail, formatContacts, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../src/state";
 import { sampleMessages } from "../src/data";
 import { PAGE } from "../src/ui/MessageList";
+import { menus } from "../src/ui/PopupMenu";
 
 const open: HeadlessCore[] = [];
-afterEach(() => open.splice(0).forEach((h) => h.free()));
+const nativeMenus = menus.native;
+afterEach(() => {
+  open.splice(0).forEach((h) => h.free());
+  menus.native = nativeMenus;
+});
 
 function app() {
   const h = new HeadlessCore({ width: 1200, height: 760 });
@@ -394,7 +399,8 @@ test("a big mailbox renders a page of rows at a time: more as the scroll nears t
   expect(rendered()).toBe(PAGE); // a new mailbox starts again from one page
 });
 
-test("a right click on a row selects it and opens a menu of what to do with it", async () => {
+test("a right click on a row selects it and opens a menu of what to do with it (the system's, on macOS)", async () => {
+  menus.native = true;
   const { h, mail } = app();
   const [x, y] = h.rect(text(h, "Sunday lunch?"))!;
   h.pointerButton("down", 2, x + 10, y + 5);
@@ -410,6 +416,7 @@ test("a right click on a row selects it and opens a menu of what to do with it",
 });
 
 test("a right click on one of several picked rows keeps them, and the menu archives all of them", async () => {
+  menus.native = true;
   const { h, mail } = app();
   mail.select(mail.list()[0].id);
   mail.pick(mail.list()[2].id, true);
@@ -430,6 +437,60 @@ test("a right click on one of several picked rows keeps them, and the menu archi
   await Bun.sleep(100); // the menu opens once the selection is drawn
   expect(mail.picked().size).toBe(0);
   expect(mail.selected()!.id).toBe(other.id);
+});
+
+test("where the system has no context menus (Linux, Windows), the app draws its own: keys, hover, a press outside", async () => {
+  menus.native = false;
+  const { h, mail } = app();
+  const at = (t: string) => h.rect(text(h, t, -1))!;
+  const [x, y] = h.rect(text(h, "Sunday lunch?"))!;
+  h.pointerButton("down", 2, x + 10, y + 5);
+  h.step();
+  expect(mail.selected()!.subject).toBe("Sunday lunch?");
+  expect(texts(h)).toContain("Mark as Read or Unread");
+  const [mx, my] = at("Reply All");
+  expect([mx, my].every((v, i) => v > [x, y][i])).toBe(true); // at the pointer
+  h.key("j"); // the menu has the keys: no triage behind it
+  expect(mail.selected()!.subject).toBe("Sunday lunch?");
+  h.key("ArrowDown"); // Reply
+  h.key("ArrowDown"); // Reply All
+  h.key("ArrowUp");
+  h.key("Escape");
+  expect(texts(h)).not.toContain("Mark as Read or Unread");
+  expect(mail.replying()).toBe(false); // Escape closed the menu, nothing else
+  // Enter takes the one the keys are on.
+  h.pointerButton("down", 2, x + 10, y + 5);
+  h.step();
+  h.key("ArrowDown");
+  h.key("Enter");
+  await Bun.sleep(0); // the menu answers like the system's: a promise
+  expect(mail.replying()).toBe(true);
+  h.key("Escape");
+  // A press outside closes it and does nothing else; a press on an item runs it.
+  h.pointerButton("down", 2, x + 10, y + 5);
+  h.step();
+  h.press(text(h, "Onboarding flow: final review before Thursday"));
+  expect(texts(h)).not.toContain("Mark as Read or Unread");
+  expect(mail.selected()!.subject).toBe("Sunday lunch?");
+  h.pointerButton("down", 2, x + 10, y + 5);
+  h.step();
+  h.press(text(h, "Archive", -1));
+  await Bun.sleep(0);
+  expect(mail.messages().find((m) => m.subject === "Sunday lunch?")!.folder).toBe("archive");
+  expect(texts(h)).not.toContain("Mark as Read or Unread");
+});
+
+test("the drawn menu stays inside the window near its edges", () => {
+  menus.native = false;
+  const { h } = app();
+  // A right click low on the list: the menu opens upwards, inside the window.
+  const rows = [...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === "Re: Renewal terms for 2027");
+  const [x, y] = h.rect(rows[0])!;
+  h.pointerButton("down", 2, x + 10, y + 5);
+  h.step();
+  const last = h.rect(text(h, "Mark as Read or Unread"))!;
+  expect(last[3]).toBeLessThan(y + 5); // above the pointer
+  expect(h.rect(text(h, "Reply", -1))![1]).toBeGreaterThan(0);
 });
 
 test("when the server sends a message back as another row (same Message-ID), the selection stays on it", () => {

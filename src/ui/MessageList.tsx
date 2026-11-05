@@ -1,11 +1,12 @@
 // The message list: a row per message, scrolled with the wheel.
-import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, showMenu, useWindowSize, type Node, type PointerEvent } from "mantou-ui";
+import { For, Scroll, Show, Text, View, createEffect, createMemo, createSignal, on, onCleanup, useUi, useWindowSize, type Node, type PointerEvent } from "mantou-ui";
 import { daysSince, now, shortDate, type Message } from "../data";
 import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
 import { Icon, type IconName } from "./icons";
 import { ROW_MENU } from "./menu";
+import { contextMenu, menus } from "./PopupMenu";
 import type { Remote } from "../mail/remote";
 
 export const FOLDER_NAMES: Record<string, string> = { archive: "Archive", sent: "Sent", trash: "Trash" };
@@ -166,18 +167,21 @@ function LoadOlder(props: { mail: Mail; remote: Remote }) {
 
 export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id: string) => void }) {
   const m = props.mail;
+  const ui = useUi();
   let list: Node | undefined;
   const size = useWindowSize();
   // A right click (or Control + click) selects the row (unless it's one of several picked), then asks what to do with it: its commands are the app menu's.
   const menu = (msg: Message, e: PointerEvent) => {
     if (!m.picked().has(msg.id)) m.select(msg.id); // on one of several picked rows, the menu is for all of them
     // The menu blocks the window while it's open, so the selection has to be drawn before it opens, not after it closes.
-    setTimeout(() => {
-      void showMenu(ROW_MENU, { x: e.x, y: e.y }).then((id) => {
+    const ask = () =>
+      void contextMenu(ui, ROW_MENU, { x: e.x, y: e.y }).then((id) => {
         menuClosedAt = performance.now();
         if (id) props.onCommand(id);
       });
-    }, MENU_DELAY);
+    // (A menu the app draws is part of the window: it opens at once, with the selection.)
+    if (menus.native) setTimeout(ask, MENU_DELAY);
+    else ask();
   };
   const rows = new Map<number, Node>();
   const [limit, setLimit] = createSignal(PAGE);
