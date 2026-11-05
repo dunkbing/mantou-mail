@@ -95,3 +95,17 @@ export function AttachmentChip(props: { attachment: Attachment; onPress?: () => 
     </View>
   );
 }
+
+/** A text cut at its web links: the pieces, with a url on the links (trailing punctuation stays outside them). */
+export function linkParts(text: string): { text: string; url?: string }[] {
+  const parts: { text: string; url?: string }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)) {
+    const url = m[0].replace(/[.,;:!?)\]}>]+$/, "");
+    if (m.index! > last) parts.push({ text: text.slice(last, m.index) });
+    parts.push({ text: url, url: /^www\./i.test(url) ? `https://${url}` : url });
+    last = m.index! + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}

@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import type { Remote } from "../mail/remote";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
-import { Avatar, Chip, LabelChips, Kbd, AttachmentChip } from "./common";
+import { Avatar, Chip, LabelChips, Kbd, AttachmentChip, linkParts } from "./common";
 import { ReplyComposer } from "./Compose";
 import { Icon } from "./icons";
 
@@ -44,7 +44,21 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
         <Text style={small()}>{longDate(msg().date)}</Text>
       </View>
       <View style={{ gap: 14 }}>
-        <For each={msg().body}>{(p) => <Text selectable style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>{p}</Text>}</For>
+        <For each={msg().body}>
+          {(p) => (
+            <Text selectable style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>
+              <For each={linkParts(p)}>
+                {(part) =>
+                  part.url ? (
+                    <Text style={{ color: C.accentText, textDecoration: "underline", cursor: "pointer" }} onPress={() => props.remote?.openLink(part.url!)}>{part.text}</Text>
+                  ) : (
+                    part.text
+                  )
+                }
+              </For>
+            </Text>
+          )}
+        </For>
       </View>
       <Show when={msg().attachments?.length}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

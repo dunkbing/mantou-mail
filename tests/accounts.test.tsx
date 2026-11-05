@@ -14,6 +14,8 @@ import { join } from "node:path";
 import { createMail, type Mail } from "../src/state";
 import { imapServer, oauthServer, until } from "./server";
 import { glyph } from "../src/ui/icons";
+import { linkParts } from "../src/ui/common";
+import { sampleMessages } from "../src/data";
 
 const cleanup: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -360,4 +362,30 @@ test("a company address on Microsoft 365 (by its MX records) signs in with Micro
   await until(() => texts(h).includes("ADD A MICROSOFT ACCOUNT"), "the MX lookup", () => h.step());
   expect(texts(h)).toContain("Sign in with Microsoft");
   expect(texts(h)).not.toContain("Use an app password"); // Microsoft takes none
+});
+
+test("web links in a message are highlighted and open in the browser when pressed", async () => {
+  expect(linkParts("See https://example.com/a?b=1, or www.example.org. Done")).toEqual([
+    { text: "See " },
+    { text: "https://example.com/a?b=1", url: "https://example.com/a?b=1" },
+    { text: ", or " },
+    { text: "www.example.org", url: "https://www.example.org" },
+    { text: ". Done" },
+  ]);
+  const opened: string[] = [];
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { openUrl: (u) => void opened.push(u) });
+  cleanup.push(() => remote.stop());
+  const base = sampleMessages().find((m) => m.folder === "inbox" && m.important)!;
+  const mail = createMail([{ ...base, body: ["Details at https://example.com/plan today."] }], { onChange: remote.onChange });
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  cleanup.push(mount(h.ui, () => <App mail={mail} remote={remote} />));
+  h.step();
+  const paras = [...h.ui.nodes.values()].filter((n) => n.isText && n.textContent === "Details at https://example.com/plan today.").map((n) => h.rect(n)!);
+  const para = paras.sort((a, b) => b[0] - a[0])[0]; // the reader's, not the list's preview; // a link is a span: it has no box of its own
+  h.press([para[0] + 130, para[1] + 10]); // on the link
+  h.press([para[0] + 4, para[1] + 10]); // on "Details": not a link
+  expect(opened).toEqual(["https://example.com/plan"]);
 });
