@@ -400,7 +400,7 @@ test("a right click on a row selects it and opens a menu of what to do with it",
   h.pointerButton("down", 2, x + 10, y + 5);
   await Bun.sleep(0);
   const asked = h.lastService() as unknown as { kind: string; x: number; y: number; items: { id?: string; label?: string }[] };
-  expect([asked.x, asked.y]).toEqual([x + 10, process.platform === "darwin" ? 760 - (y + 5) : y + 5]); // macOS counts y from the bottom (dunkbing/mantou#51)
+  expect([asked.x, asked.y]).toEqual([x + 10, y + 5]);
   expect(asked.kind).toBe("showMenu");
   expect(asked.items.filter((i) => i.id).map((i) => i.id)).toEqual(["reply", "replyAll", "forward", "archive", "inbox", "delete", "snooze", "label", "star", "unread"]);
   expect(mail.selected()!.subject).toBe("Sunday lunch?");

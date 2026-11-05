@@ -1,6 +1,6 @@
 // Mantou Mail: a sidebar of mailboxes and labels, a message list, a reader
 // that shows the whole conversation, and keyboard triage (? lists the keys).
-import { Show, View, createEffect, createSignal, onCleanup, onKey, setBadge, setMenu, useColorScheme, useUi, type Node } from "mantou-ui";
+import { Show, View, createEffect, createSignal, onCleanup, onKey, setBadge, setMenu, useUi, type Node } from "mantou-ui";
 import { LABELS } from "./data";
 import { createMail, usesTabs, type Mail } from "./state";
 import { C, hline, vline } from "./ui/theme";
@@ -18,8 +18,6 @@ import { APP_MENU, type Command } from "./ui/menu";
 export function App(props: { mail?: Mail; remote?: Remote }) {
   const m = props.mail ?? createMail();
   const ui = useUi();
-  // The theme (src/ui/theme.ts) is made before a window exists, so it starts following the system once the app mounts: see dunkbing/mantou#54.
-  useColorScheme();
   const [help, setHelp] = createSignal(false);
   const [accounts, setAccounts] = createSignal(false);
   let searchInput: Node | undefined;
@@ -53,12 +51,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
     previous: () => m.move(-1),
     shortcuts: () => setHelp(true),
   };
-  // Workaround for dunkbing/mantou#48: a setMenu while the app is being set up answers false (the core
-  // isn't running yet), so it's called at the first layout, which can't be sooner.
-  let menuSet = false;
-  const installMenu = () => {
-    if (!menuSet) void setMenu(APP_MENU).then((ok) => (menuSet = ok));
-  };
+  void setMenu(APP_MENU);
   const runCommand = (id: string) => {
     if (accounts() || help() || m.composing()) return; // a dialog is open: the menu waits, as the keys do
     commands[id as Command]?.();
@@ -130,7 +123,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
   return (
     // minHeight 0: flex items are at least as tall as their content otherwise
     // (as in CSS), and the list and reader clip and scroll instead.
-    <View onLayout={installMenu} style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: C.surface }}>
+    <View style={{ flexGrow: 1, minHeight: 0, flexDirection: "row", backgroundColor: C.surface }}>
       <Sidebar mail={m} remote={props.remote} searchRef={(n) => (searchInput = n)} onAccounts={() => setAccounts(true)} />
       <View style={vline()} />
       <View style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}>

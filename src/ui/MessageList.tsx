@@ -26,8 +26,7 @@ export function rowName(mail: Mail, msg: Message) {
 
 /**
  * Shift or Ctrl/⌘ held as the button went down (a press doesn't carry the keys). Shared by all rows:
- * workaround for dunkbing/mantou#55, where after a context menu the core sends every pointer down to
- * the row that was right-clicked, not the one under the pointer.
+ * (a modifier set on a down is read at the press, whichever row got the down).
  */
 let held: "range" | "toggle" | null = null;
 /**
@@ -170,9 +169,7 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
   // A right click (or Control + click) selects the row (unless it's one of several picked), then asks what to do with it: its commands are the app menu's.
   const menu = (msg: Message, e: PointerEvent) => {
     if (!m.picked().has(msg.id)) m.select(msg.id); // on one of several picked rows, the menu is for all of them
-    // Workaround for dunkbing/mantou#51: on macOS the menu's y is measured from the bottom of the window.
-    const y = process.platform === "darwin" ? size().height - e.y : e.y;
-    void showMenu(ROW_MENU, { x: e.x, y }).then((id) => {
+    void showMenu(ROW_MENU, { x: e.x, y: e.y }).then((id) => {
       menuClosedAt = performance.now();
       if (id) props.onCommand(id);
     });
