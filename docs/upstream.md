@@ -10,6 +10,7 @@ The app uses `mantou-ui` 0.3.1 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 |---|---|---|---|
 | Telling a cancelled dialog from one that couldn't be shown (and Linux's zenity cancel answers `[]`) | bug | [dunkbing/mantou#28](https://github.com/dunkbing/mantou/issues/28) | a guess at whether the system has dialogs (zenity, or a portal and D-Bus); without them, a path field to attach, Save as goes to Downloads, removing an account doesn't ask (`hasDialogs` in `src/mail/files.ts`) |
 | A `<View dragRegion>` with no children and no background doesn't move the window (it isn't hit) | bug | [dunkbing/mantou#56](https://github.com/dunkbing/mantou/issues/56) | the strip under the traffic lights has a background |
+| Showing HTML mail: a web view that is safe for mail (no scripts, remote content blocked, links intercepted, sized to its content, scrolls with the reader), or a native HTML renderer | feature | Mantou's [#73](https://github.com/dunkbing/mantou/issues/73) ([what mail needs](https://github.com/dunkbing/mantou/issues/73#issuecomment-6664728814)), [#74](https://github.com/dunkbing/mantou/issues/74) | the plain-text part only |
 | Context menus on Linux and Windows (a right click, `onContextMenu`, is in 0.1.7; `showMenu` works on macOS) | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | none: the row menu only opens on macOS |
 
 ## Fixed
