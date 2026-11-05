@@ -10,7 +10,7 @@ import { Blobs } from "./blobs";
 import type { MessageOptions } from "mantou-ui";
 import { confirm, downloadsDir, freeName, hasDialogs, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
-import { AccountSync, checkLogin, type Login, type SyncStatus } from "./imap";
+import { AccountSync, checkLogin, oneCopy, type Login, type SyncStatus } from "./imap";
 import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
 import { OAuthError, appProviders, hostOfMx, oauthFor, refresh, signIn, type OAuthProvider, type OAuthProviderId, type Providers, type Tokens } from "./oauth";
 import { resolveMx } from "node:dns/promises";
@@ -82,7 +82,7 @@ export class Remote {
   /** What the app starts with: the saved mail of real accounts, or the sample mail when there are none. */
   initial(): { messages: Message[]; accounts: AccountConfig[] | typeof SAMPLE_ACCOUNTS } {
     const accounts = this.accounts();
-    return accounts.length ? { messages: this.store.messages(), accounts } : { messages: sampleMessages(), accounts: SAMPLE_ACCOUNTS };
+    return accounts.length ? { messages: oneCopy(this.store.messages()), accounts } : { messages: sampleMessages(), accounts: SAMPLE_ACCOUNTS };
   }
 
   private setStatus(id: string, s: SyncStatus) {

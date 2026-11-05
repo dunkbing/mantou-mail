@@ -460,6 +460,23 @@ test("a refresh that changes nothing keeps the very same messages (rows aren't r
   expect(now[1].unread).toBe(true);
 });
 
+test("the click that dismisses a context menu doesn't select the row under it", async () => {
+  const { h, mail } = app();
+  const [a, b] = [mail.list()[0], mail.list()[3]];
+  mail.select(a.id);
+  const [x, y] = h.rect(text(h, mail.list()[1].subject))!;
+  h.pointerButton("down", 2, x + 10, y + 5);
+  await Bun.sleep(0);
+  expect(mail.selected()!.id).toBe(mail.list()[1].id);
+  h.answer(null); // dismissed
+  for (let i = 0; i < 3; i++) (h.step(), await Bun.sleep(0));
+  h.press(text(h, b.subject)); // the dismissing click, arriving as a press
+  expect(mail.selected()!.id).toBe(mail.list()[1].id);
+  await Bun.sleep(400);
+  h.press(text(h, b.subject)); // a later click is a click
+  expect(mail.selected()!.id).toBe(b.id);
+});
+
 test("Send Later presets: in an hour, tomorrow morning and afternoon, Monday", () => {
   const at = (from: string) => sendLaterOptions(new Date(from)).map((o) => `${o.name} ${o.at.toString().slice(0, 21)}`);
   expect(at("2026-11-03T09:30:00")).toEqual(["In an hour Tue Nov 03 2026 10:30", "Tomorrow morning Wed Nov 04 2026 08:00", "Tomorrow afternoon Wed Nov 04 2026 13:00", "Monday morning Mon Nov 09 2026 08:00"]);

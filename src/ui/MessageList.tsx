@@ -30,6 +30,12 @@ export function rowName(mail: Mail, msg: Message) {
  * the row that was right-clicked, not the one under the pointer.
  */
 let held: "range" | "toggle" | null = null;
+/**
+ * When a context menu was last dismissed. A click that dismisses it can reach the row under the pointer
+ * as a press (macOS), selecting another message; a press right after the menu closes is ignored.
+ */
+let menuClosedAt = -Infinity;
+const MENU_GRACE = 350;
 
 export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void; onMenu: (message: Message, e: PointerEvent) => void }) {
   const msg = () => props.message;
@@ -43,6 +49,7 @@ export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => voi
       style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 16, backgroundColor: selected() ? C.accentSoft : C.surface }}
       onPointerDown={(e) => (held = e.button !== 0 ? null : e.shift ? "range" : e.ctrl || e.meta ? "toggle" : null)}
       onPress={() => {
+        if (performance.now() - menuClosedAt < MENU_GRACE) return;
         if (held) props.mail.pick(msg().id, held === "range");
         else props.mail.select(msg().id);
         held = null;
@@ -165,7 +172,10 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
     if (!m.picked().has(msg.id)) m.select(msg.id); // on one of several picked rows, the menu is for all of them
     // Workaround for dunkbing/mantou#51: on macOS the menu's y is measured from the bottom of the window.
     const y = process.platform === "darwin" ? size().height - e.y : e.y;
-    void showMenu(ROW_MENU, { x: e.x, y }).then((id) => id && props.onCommand(id));
+    void showMenu(ROW_MENU, { x: e.x, y }).then((id) => {
+      menuClosedAt = performance.now();
+      if (id) props.onCommand(id);
+    });
   };
   const rows = new Map<number, Node>();
   const [limit, setLimit] = createSignal(PAGE);

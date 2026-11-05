@@ -57,6 +57,21 @@ const FOLDERS: [Folder, string[], RegExp][] = [
 /** When the same message is in several folders (Gmail's All Mail), which copy shows. */
 const PRIORITY: Record<Folder, number> = { inbox: 0, snoozed: 0, drafts: 1, scheduled: 1, sent: 2, trash: 3, archive: 4 };
 
+/** One copy per message (the most specific folder's): the same mail is in several folders on Gmail and others. */
+export function oneCopy(list: Message[]): Message[] {
+  const out: Message[] = [];
+  const shown = new Map<string, Message>();
+  for (const m of list) {
+    if (!m.messageId) {
+      out.push(m);
+      continue;
+    }
+    const key = `${m.account}\n${m.messageId}`, other = shown.get(key);
+    if (!other || PRIORITY[m.folder] < PRIORITY[other.folder]) shown.set(key, m);
+  }
+  return [...out, ...shown.values()];
+}
+
 export function folderPaths(list: ListResponse[]): Map<Folder, string> {
   const paths = new Map<Folder, string>();
   for (const [folder, uses, names] of FOLDERS) {
@@ -384,20 +399,9 @@ export class AccountSync {
 
   /** Sends the account's messages to the app: one copy per message (the most specific folder's). */
   emit() {
-    const shown = new Map<string, Message>();
-    const out: Message[] = [];
     const mirrors = this.hooks.localDrafts?.(this.cfg.id) ?? new Set<string>();
-    for (const m of this.byId.values()) {
-      if (this.deletions.has(m.id)) continue;
-      if (m.folder === "drafts" && m.messageId && mirrors.has(m.messageId)) continue;
-      if (!m.messageId) {
-        out.push(m);
-        continue;
-      }
-      const other = shown.get(m.messageId);
-      if (!other || PRIORITY[m.folder] < PRIORITY[other.folder]) shown.set(m.messageId, m);
-    }
-    this.hooks.onMessages(this.cfg.id, [...out, ...shown.values()]);
+    const mine = [...this.byId.values()].filter((m) => !this.deletions.has(m.id) && !(m.folder === "drafts" && m.messageId && mirrors.has(m.messageId)));
+    this.hooks.onMessages(this.cfg.id, oneCopy(mine));
   }
 
   // ------------------------------------------------------------ changes from the app

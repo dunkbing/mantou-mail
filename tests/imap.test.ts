@@ -162,6 +162,29 @@ test("the saved copy shows at start, before (or without) a connection", async ()
   expect(remote.statuses()["testuser@example.com"].state).toBe("needs-password"); // the memory keychain forgot it
 });
 
+test("mail that's in two folders (Gmail's All Mail) shows once at start too, not twice until the first sync", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mantou-mail-"));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const first = await setup({ dir });
+  await first.server.deliver("Archive", PRIYA); // the same Message-ID as the one in the Inbox
+  await addAccount(first);
+  expect(first.mail.list().filter((m) => m.subject === "Onboarding review").length).toBe(1);
+  const size = first.mail.threadSize(first.mail.list().find((m) => m.subject === "Onboarding review")!); // 2: it and the reply
+  await first.remote.stop();
+  first.store.close();
+  await first.server.close();
+
+  const store = new Store(dir);
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets());
+  cleanup.push(() => remote.stop());
+  const start = remote.initial();
+  const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
+  const one = mail.list().filter((m) => m.subject === "Onboarding review");
+  expect(one.length).toBe(1);
+  expect(mail.threadSize(one[0])).toBe(size); // the copy in the other folder isn't counted as part of the conversation
+});
+
 test("a wrong password is refused with the server's reason, and nothing is saved", async () => {
   const env = await setup();
   await expect(env.remote.addAccount({ email: "testuser@example.com", password: "nope", imap: env.server.settings, smtp: env.server.smtp.settings })).rejects.toThrow(/didn't accept the password/);

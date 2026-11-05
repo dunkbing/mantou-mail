@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Mail that Gmail keeps in two folders no longer shows a conversation count ("2") for a few seconds after the app opens, and the conversation no longer lists it twice.
+- Dismissing a right-click menu with a click no longer selects the message under the pointer.
 - The message list no longer redraws every row when the server's mail refreshes and nothing changed.
 - macOS: no title bar; the window's traffic-light buttons float over the sidebar, and the window can be moved by the strip under them or by the toolbar.
 - The selected conversation stays selected when the server's mail refreshes (it used to jump back to the first one when its copy came back as another message).
