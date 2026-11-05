@@ -398,7 +398,7 @@ test("a right click on a row selects it and opens a menu of what to do with it",
   const { h, mail } = app();
   const [x, y] = h.rect(text(h, "Sunday lunch?"))!;
   h.pointerButton("down", 2, x + 10, y + 5);
-  await Bun.sleep(0);
+  await Bun.sleep(100); // the menu opens once the selection is drawn
   const asked = h.lastService() as unknown as { kind: string; x: number; y: number; items: { id?: string; label?: string }[] };
   expect([asked.x, asked.y]).toEqual([x + 10, y + 5]);
   expect(asked.kind).toBe("showMenu");
@@ -417,7 +417,7 @@ test("a right click on one of several picked rows keeps them, and the menu archi
   const ids = [...mail.picked()];
   const [x, y] = h.rect(text(h, mail.list()[1].subject))!;
   h.pointerButton("down", 2, x + 10, y + 5);
-  await Bun.sleep(0);
+  await Bun.sleep(100); // the menu opens once the selection is drawn
   expect([...mail.picked()]).toEqual(ids); // still picked
   h.chooseMenu("archive");
   for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(0));
@@ -427,7 +427,7 @@ test("a right click on one of several picked rows keeps them, and the menu archi
   const other = mail.list()[3];
   const [ox, oy] = h.rect(text(h, other.subject))!;
   h.pointerButton("down", 2, ox + 10, oy + 5);
-  await Bun.sleep(0);
+  await Bun.sleep(100); // the menu opens once the selection is drawn
   expect(mail.picked().size).toBe(0);
   expect(mail.selected()!.id).toBe(other.id);
 });
@@ -466,7 +466,7 @@ test("the click that dismisses a context menu doesn't select the row under it", 
   mail.select(a.id);
   const [x, y] = h.rect(text(h, mail.list()[1].subject))!;
   h.pointerButton("down", 2, x + 10, y + 5);
-  await Bun.sleep(0);
+  await Bun.sleep(100); // the menu opens once the selection is drawn
   expect(mail.selected()!.id).toBe(mail.list()[1].id);
   h.answer(null); // dismissed
   for (let i = 0; i < 3; i++) (h.step(), await Bun.sleep(0));

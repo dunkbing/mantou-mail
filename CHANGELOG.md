@@ -4,6 +4,7 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Right-clicking a message selects it at once, before the menu opens (it used to be selected only after the menu was closed).
 - Web links in messages are underlined and open in your browser when clicked.
 - Updated Mantou to 0.3.1: rich text (the links), and fixes that let the app drop its workarounds for the menu bar, the Edit menu's shortcuts and the right-click menu's position.
 - Mail that Gmail keeps in two folders no longer shows a conversation count ("2") for a few seconds after the app opens, and the conversation no longer lists it twice.

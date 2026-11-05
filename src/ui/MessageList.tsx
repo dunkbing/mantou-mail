@@ -35,6 +35,8 @@ let held: "range" | "toggle" | null = null;
  */
 let menuClosedAt = -Infinity;
 const MENU_GRACE = 350;
+/** How long the selection has to be drawn before a context menu opens (ms). */
+const MENU_DELAY = 60;
 
 export function Row(props: { mail: Mail; message: Message; ref: (n: Node) => void; onMenu: (message: Message, e: PointerEvent) => void }) {
   const msg = () => props.message;
@@ -169,10 +171,13 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
   // A right click (or Control + click) selects the row (unless it's one of several picked), then asks what to do with it: its commands are the app menu's.
   const menu = (msg: Message, e: PointerEvent) => {
     if (!m.picked().has(msg.id)) m.select(msg.id); // on one of several picked rows, the menu is for all of them
-    void showMenu(ROW_MENU, { x: e.x, y: e.y }).then((id) => {
-      menuClosedAt = performance.now();
-      if (id) props.onCommand(id);
-    });
+    // The menu blocks the window while it's open, so the selection has to be drawn before it opens, not after it closes.
+    setTimeout(() => {
+      void showMenu(ROW_MENU, { x: e.x, y: e.y }).then((id) => {
+        menuClosedAt = performance.now();
+        if (id) props.onCommand(id);
+      });
+    }, MENU_DELAY);
   };
   const rows = new Map<number, Node>();
   const [limit, setLimit] = createSignal(PAGE);
