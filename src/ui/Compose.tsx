@@ -1,6 +1,7 @@
 // Writing mail: the reply composer under the reader, and the new-message composer.
 import { For, Input, Show, Text, View, createMemo, createSignal, onCleanup, onFileDrop, onKey, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
+import type { Replies } from "../agent/replies";
 import { applyFormat, type Format } from "../mail/format";
 import { Icon } from "./icons";
 import { QUICK_REPLIES, acceptRecipient, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../state";
@@ -178,7 +179,7 @@ function SendLaterTimes(props: { mail: Mail }) {
 }
 
 /** A reply, written under the conversation. Quick replies are starting points. */
-export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
+export function ReplyComposer(props: { mail: Mail; remote?: Remote; replies?: Replies }) {
   const m = props.mail;
   const [later, setLater] = createSignal(false);
   /** The address lines, open to change who it goes to. */
@@ -212,7 +213,12 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
         </View>
       </Show>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-        <For each={QUICK_REPLIES}>
+        <Show when={props.replies}>
+          <View style={{ height: 28, paddingLeft: 12, paddingRight: 12, borderRadius: 14, backgroundColor: C.accent, justifyContent: "center", opacity: props.replies!.running() ? 0.5 : 1 }} onPress={() => void props.replies!.run(m.conversation())}>
+            <Text style={{ fontSize: 12, fontWeight: 600, color: "#ffffff" }}>{props.replies!.running() ? "Thinking…" : props.replies!.cached(m.conversation()) ? "Suggest again" : "Suggest replies"}</Text>
+          </View>
+        </Show>
+        <For each={props.replies?.cached(m.conversation()) ?? QUICK_REPLIES}>
           {(text) => (
             <View style={{ height: 28, paddingLeft: 12, paddingRight: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: "center" }} onPress={() => {
                 m.insertReply(text);
@@ -223,6 +229,9 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
           )}
         </For>
       </View>
+      <Show when={props.replies?.note()}>
+        <Text style={[small(), { color: C.danger }]}>{props.replies!.note()}</Text>
+      </Show>
       <FormatBar mail={m} body={() => body} focused={bodyFocus} />
       <Input
         ref={(n) => (body = n)}

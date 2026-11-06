@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import type { Remote } from "../mail/remote";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
+import type { Replies } from "../agent/replies";
 import { isLong, type Summaries } from "../agent/summary";
 import { Avatar, Chip, LabelChips, Kbd, AttachmentChip, TextButton, linkParts } from "./common";
 import { ReplyComposer } from "./Compose";
@@ -138,7 +139,7 @@ export function FoldedMessage(props: { mail: Mail; message: Message; onPress: ()
   );
 }
 
-export function Panel(props: { mail: Mail; remote?: Remote }) {
+export function Panel(props: { mail: Mail; remote?: Remote; replies?: Replies }) {
   const m = props.mail;
   const s = () => m.selected()!;
   const option = (key: string, text: string, onPress: () => void, active = false, dot?: string) => (
@@ -164,7 +165,7 @@ export function Panel(props: { mail: Mail; remote?: Remote }) {
           <Text style={[caption(), { fontWeight: 500 }]}>{m.panel() === "reply" ? "Esc keeps a draft" : "Esc to close"}</Text>
         </View>
         <Show when={m.panel() === "reply"}>
-          <ReplyComposer mail={m} remote={props.remote} />
+          <ReplyComposer mail={m} remote={props.remote} replies={props.replies} />
         </Show>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           <Show when={m.panel() === "snooze"}>
@@ -204,7 +205,7 @@ function SummaryCard(props: { summaries: Summaries; conversation: Message[] }) {
   );
 }
 
-export function Reader(props: { mail: Mail; remote?: Remote; summaries?: Summaries }) {
+export function Reader(props: { mail: Mail; remote?: Remote; summaries?: Summaries; replies?: Replies }) {
   const m = props.mail;
   let scroll: Node | undefined;
   /** Messages of the conversation opened by pressing them (the selected one is always open). */
@@ -276,7 +277,7 @@ export function Reader(props: { mail: Mail; remote?: Remote; summaries?: Summari
           </View>
         </Scroll>
         <Show when={m.panel()}>
-          <Panel mail={m} remote={props.remote} />
+          <Panel mail={m} remote={props.remote} replies={props.replies} />
         </Show>
       </Show>
     </View>

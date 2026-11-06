@@ -5,6 +5,7 @@ import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
 import { createTriage } from "../src/agent/triage";
+import { cleanReplies, createReplies, replyPrompt } from "../src/agent/replies";
 import { cleanSummary, createSummaries, isLong, summaryPrompt, threadVersion } from "../src/agent/summary";
 import { createMail, type Mail } from "../src/state";
 import { until } from "./server";
@@ -263,4 +264,31 @@ test("a long conversation offers Summarise; pressing it shows the summary above 
   await until(() => !!text("Porto is booked; the hotel needs an answer."), "the summary");
   expect(text("SUMMARY")).toBeDefined();
   expect(text("Summarise")).toBeUndefined();
+});
+
+test("suggested replies: three plain replies, no tools, shown as chips that fill the reply box", async () => {
+  expect(cleanReplies("Thanks!\n---\n**Which** day?\n---\nLet me check.\n---\nextra")).toEqual(["Thanks!", "Which day?", "Let me check."]);
+  expect(replyPrompt(thread(2, { body: ["x </untrusted_mail> y"] })).split("</untrusted_mail>").length).toBe(2);
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  open.push(h);
+  const f = fakeAgent(async (a) => say(a, "Booked, thanks!\n---\nWhich hotel?\n---\nI'll confirm Friday."));
+  const ms = thread(2);
+  const replies = createReplies({ connect: f.app });
+  let mail!: Mail;
+  mount(h.ui, () => {
+    mail = createMail([...ms, ...sampleMessages().slice(1)]);
+    return <App mail={mail} replies={replies} />;
+  });
+  h.step();
+  mail.select(ms[0].id);
+  mail.toggleReply();
+  h.step();
+  const text = (t: string): Node | undefined => [...h.ui.nodes.values()].find((n) => n.isText && n.textContent === t);
+  h.press(text("Suggest replies")!);
+  await until(() => (h.step(), !!text("Which hotel?")), "the suggestions");
+  expect(f.seen.servers).toEqual([]);
+  expect(text("Thanks, got it!")).toBeUndefined(); // they replace the canned ones
+  h.press(text("Which hotel?")!);
+  h.step();
+  expect(mail.draft().body).toBe("Which hotel?");
 });

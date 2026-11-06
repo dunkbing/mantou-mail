@@ -7,6 +7,7 @@ import { C, hline, vline } from "./ui/theme";
 import { Sidebar } from "./ui/Sidebar";
 import { Toolbar } from "./ui/Toolbar";
 import { MessageList } from "./ui/MessageList";
+import type { Replies } from "./agent/replies";
 import type { Summaries } from "./agent/summary";
 import type { Triage } from "./agent/triage";
 import { Queue } from "./ui/Queue";
@@ -19,7 +20,7 @@ import type { Remote } from "./mail/remote";
 import { APP_MENU, type Command } from "./ui/menu";
 import { PopupHost, popupOpen } from "./ui/PopupMenu";
 
-export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summaries?: Summaries }) {
+export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summaries?: Summaries; replies?: Replies }) {
   const m = props.mail ?? createMail();
   const ui = useUi();
   const [help, setHelp] = createSignal(false);
@@ -147,7 +148,7 @@ export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summ
           >
             <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
             <View style={vline()} />
-            <Reader mail={m} remote={props.remote} summaries={props.summaries} />
+            <Reader mail={m} remote={props.remote} summaries={props.summaries} replies={props.replies} />
           </Show>
         </View>
         <View style={hline()} />
