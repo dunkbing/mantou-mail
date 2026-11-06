@@ -211,18 +211,12 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
         ref={(l) => (list = l)}
         style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }}
       >
-        {(item) => {
-          // Workaround for dunkbing/mantou#80: a row whose item has just gone reads it as undefined once
-          // before the list disposes it; it keeps its last one instead.
-          // (Read untracked here: the list runs this function in a tracked scope, which would remake the row.)
-          const it = createMemo<Message | typeof OLDER>((last) => item() ?? last, untrack(item));
-          return (
-            <Show when={it() !== OLDER} fallback={<LoadOlder mail={m} remote={props.remote!} />}>
-              <Row mail={m} message={it() as Message} onMenu={menu} />
-              <View style={[hline(), { marginLeft: 58, backgroundColor: C.faint }]} />
-            </Show>
-          );
-        }}
+        {(item) => (
+          <Show when={item() !== OLDER} fallback={<LoadOlder mail={m} remote={props.remote!} />}>
+            <Row mail={m} message={item() as Message} onMenu={menu} />
+            <View style={[hline(), { marginLeft: 58, backgroundColor: C.faint }]} />
+          </Show>
+        )}
       </List>
     </Show>
   );

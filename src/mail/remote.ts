@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 import { SAMPLE_ACCOUNTS, longDate, now, recipients, sampleMessages, type Attachment, type Folder, type Message } from "../data";
 import { Blobs } from "./blobs";
 import type { MessageOptions } from "mantou-ui";
-import { confirm, downloadsDir, freeName, hasDialogs, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
+import { confirm, downloadsDir, freeName, openWithSystem, pickFiles, pickSavePath, typeOf } from "./files";
 import type { Mail, Mailbox } from "../state";
 import { AccountSync, checkLogin, oneCopy, type Login, type SyncStatus } from "./imap";
 import { guessSmtp, savesSent, type ImapSettings, type SmtpSettings } from "./providers";
@@ -62,8 +62,6 @@ export class Remote {
       /** Shows a notification for new mail (default: the system's), and whether the app's window has the focus (default: asks the window; a focused app doesn't notify). */
       notify?: (n: { title: string; body: string }) => void;
       focused?: () => Promise<boolean>;
-      /** Whether the system's dialogs can be shown (default: a guess, see hasDialogs). */
-      dialogs?: boolean;
       /** The providers accounts can sign in with (default: the app's, see oauth.ts), and what opens their sign-in page (default: the system's browser). */
       oauth?: Providers;
       /** A domain's MX hosts (default: DNS), to tell a company on Google Workspace or Microsoft 365. */
@@ -265,15 +263,12 @@ export class Remote {
     }));
   }
 
-  private get dialogs() {
-    return this.options.dialogs ?? hasDialogs();
-  }
   /** The system's file dialog (null where there's none: the composer then asks for a path). */
-  pickFiles = () => pickFiles(this.dialogs);
+  pickFiles = () => pickFiles();
   /** The system's save dialog (a free name in Downloads where there's none). */
-  pickSavePath = (dir: string, name: string) => pickSavePath(dir, name, this.dialogs);
+  pickSavePath = (dir: string, name: string) => pickSavePath(dir, name);
   /** The system's message box, for a yes or no (yes where there's none). */
-  confirm = (options: MessageOptions) => confirm(options, this.dialogs);
+  confirm = (options: MessageOptions) => confirm(options);
 
   /** Waits for the outbox to empty (tests). */
   async outboxEmpty() {

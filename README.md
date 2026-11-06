@@ -34,10 +34,10 @@ To build one executable in `dist/`:
 bun run build
 ```
 
-On Linux, to make a `.deb` and a `.tar.gz` (with `install.sh`) in `dist/`, with the app's icon and menu entry:
+To make packages in `dist/` for the system you're on (macOS: `.app` and `.dmg`; Linux: `.deb`, `.tar.gz` with `install.sh`, and AppImage; Windows: an installer), with the app's icon and menu entry:
 
 ```bash
-bun run package:linux
+bun run package
 ```
 
 ## Test

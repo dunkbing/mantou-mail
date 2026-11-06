@@ -40,7 +40,7 @@ async function app() {
   cleanup.push(() => server.close());
   const store = new Store(":memory:");
   cleanup.push(() => store.close());
-  const remote = new Remote(store, memorySecrets(), { dialogs: true }); // Mantou's dialogs, answered by the tests
+  const remote = new Remote(store, memorySecrets()); // Mantou's dialogs, answered by the tests
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail: Mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -182,7 +182,6 @@ test("attachments in the app: open one, forward it with f, attach a file by its 
   const store = new Store(":memory:");
   cleanup.push(() => store.close());
   const remote = new Remote(store, memorySecrets(), { blobs: new Blobs(join(dir, "blobs")), downloads: dir, open: (p) => opened.push(p) });
-  remote.pickFiles = async () => null; // no picker on this system: the composer asks for a path
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -204,6 +203,7 @@ test("attachments in the app: open one, forward it with f, attach a file by its 
   expect(texts(h).filter((t) => t === "Q4 OKRs (draft).md").length).toBe(2); // in the reader, and on the forward
   const extra = join(dir, "agenda.txt");
   await Bun.write(extra, "1. OKRs\n2. Hiring\n");
+  h.answer({ unavailable: "no file dialog" }); // as on Linux with no portal and no zenity: the composer asks for a path
   h.press(text(h, "Attach"));
   await until(() => !!h.focused() && h.rect(h.focused()!)![0] > 500, "the path field", () => h.step());
   h.type(extra);
@@ -232,7 +232,7 @@ test("the system's dialogs: attach with the file dialog, save an attachment wher
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const store = new Store(":memory:");
   cleanup.push(() => store.close());
-  const remote = new Remote(store, memorySecrets(), { blobs: new Blobs(join(dir, "blobs")), downloads: dir, open: () => {}, dialogs: true }); // Mantou's dialogs, answered by the test
+  const remote = new Remote(store, memorySecrets(), { blobs: new Blobs(join(dir, "blobs")), downloads: dir, open: () => {} }); // Mantou's dialogs, answered by the test
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });
@@ -279,7 +279,7 @@ test("a Gmail address signs in with Google in the browser; an app password is st
   const store = new Store(":memory:");
   cleanup.push(() => store.close());
   let opened = "";
-  const remote = new Remote(store, memorySecrets(), { dialogs: true, oauth: { google: o.provider }, openUrl: async (url) => void (opened = url) });
+  const remote = new Remote(store, memorySecrets(), { oauth: { google: o.provider }, openUrl: async (url) => void (opened = url) });
   cleanup.push(() => remote.stop());
   const start = remote.initial();
   const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange });

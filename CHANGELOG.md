@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Updated Mantou to 0.5.0: Linux packages (.deb, .tar.gz and AppImage) and a Windows installer come from Mantou itself, with the app's icon.
+- Linux: an AppImage, for distributions that don't use .deb packages.
 - Mail with HTML (newsletters, GitHub notifications, receipts) now shows as designed: layout, colours, buttons, tables and the pictures inside the message. Pictures from the web stay blocked until you press "Load pictures"; links open in your browser.
 - Updated Mantou to 0.4.1: `<Html>`, which draws a static HTML/CSS document in the core (no scripts, nothing fetched but through the app).
 

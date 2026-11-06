@@ -2,16 +2,12 @@
 
 Problems and gaps found while building the app, with the issue for each in [dunkbing/mantou](https://github.com/dunkbing/mantou/issues) and the workaround in use. Code comments next to each workaround name the issue, so it's easy to find and remove once Mantou ships a fix. A need that can't be filed yet gets drafted here, ready to paste into Mantou's issue template, until someone files it.
 
-The app uses `mantou-ui` 0.3.1 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
+The app uses `mantou-ui` 0.5.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa lavapipe, headless and in a window under Xvfb, and on macOS 27 (Apple M4).
 
 ## Open
 
 | Need | Kind | Issue | Workaround in the app |
 |---|---|---|---|
-| Telling a cancelled dialog from one that couldn't be shown (and Linux's zenity cancel answers `[]`) | bug | [dunkbing/mantou#28](https://github.com/dunkbing/mantou/issues/28) | a guess at whether the system has dialogs (zenity, or a portal and D-Bus); without them, a path field to attach, Save as goes to Downloads, removing an account doesn't ask (`hasDialogs` in `src/mail/files.ts`) |
-| When a `<List>`'s items get fewer, a row past the new end reads `item()` as `undefined` before it goes | bug | [dunkbing/mantou#80](https://github.com/dunkbing/mantou/issues/80) | each row keeps its last message (a memo of `item() ?? last`, its first value read untracked) (`MessageList`) |
-| Linux packages from `mantou package` (.deb, .tar.gz, AppImage, with the icon and .desktop entry) | feature | [dunkbing/mantou#81](https://github.com/dunkbing/mantou/issues/81) (part of [#26](https://github.com/dunkbing/mantou/issues/26)) | `scripts/package-linux.ts` (`bun run package:linux`): a .deb and a .tar.gz around `mantou build`, the icon's PNGs drawn by Mantou |
-| A Windows installer from `mantou package` (MSI or NSIS, signed, Start menu shortcut and icon) | feature | [dunkbing/mantou#82](https://github.com/dunkbing/mantou/issues/82) (part of [#26](https://github.com/dunkbing/mantou/issues/26)) | none: the app isn't packaged or tested on Windows yet |
 | The colour scheme never follows the desktop's dark preference on Linux (winit has no theme on X11) | bug | [dunkbing/mantou#79](https://github.com/dunkbing/mantou/issues/79) | the app reads the XDG portal's `color-scheme` (else GNOME's) with `gdbus`/`gsettings`, follows its changes, and calls `setColorScheme` (`src/ui/desktopScheme.ts`; `scripts/fake-portal.py` to check it without a desktop) |
 | A `<View dragRegion>` with no children and no background doesn't move the window (it isn't hit) | bug | [dunkbing/mantou#56](https://github.com/dunkbing/mantou/issues/56) | the strip under the traffic lights has a background |
 | Context menus on Linux and Windows (a right click, `onContextMenu`, is in 0.1.7; `showMenu` works on macOS) | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | the app draws its own row menu where Mantou has none (`src/ui/PopupMenu.tsx`): the same items, keys (Up, Down, Enter, Esc), hover, a press outside closes it |
@@ -20,6 +16,9 @@ The app uses `mantou-ui` 0.3.1 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 
 | Need | Issue | In | What the app uses now |
 |---|---|---|---|
+| Packages from `mantou package` on Linux (.deb, .tar.gz, AppImage) and Windows (an NSIS installer) | [#81](https://github.com/dunkbing/mantou/issues/81), [#82](https://github.com/dunkbing/mantou/issues/82) | 0.5.0 | `bun run package` (`mantou package`), with the name, id, icon and per-platform settings in package.json's `"mantou"` block |
+| Telling a cancelled dialog from one that couldn't be shown | [#28](https://github.com/dunkbing/mantou/issues/28) | 0.5.0 | the dialogs reject when none can be shown: Attach then asks for a path, Save goes to Downloads, removing an account doesn't ask (`src/mail/files.ts`) |
+| When a `<List>`'s items got fewer, a row past the new end read `item()` as `undefined` | [#80](https://github.com/dunkbing/mantou/issues/80) | 0.5.0 | the rows read `item()` directly |
 | `setMenu` at startup answered `false` (macOS) | [#48](https://github.com/dunkbing/mantou/issues/48) | 0.3.1 | `setMenu(APP_MENU)` when the app is set up |
 | The Edit menu's predefined items took Cmd+A/C/X/V/Z from inputs (macOS) | [#49](https://github.com/dunkbing/mantou/issues/49) | 0.3.1 | the Edit menu has undo, redo, cut, copy, paste and select all; checked in a window |
 | `showMenu` counted y from the bottom of the window (macOS) | [#51](https://github.com/dunkbing/mantou/issues/51) | 0.3.1 | the row menu passes the pointer's y as it is |

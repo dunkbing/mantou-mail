@@ -2,21 +2,50 @@
   "name": "mantou-mail",
   "version": "0.0.0",
   "private": true,
-  "description": "A desktop mail client built with Mantou (Bun + TypeScript, native UI)",
+  "description": "Read, write and organise your email",
+  "homepage": "https://github.com/dunkbing/mantou-mail",
   "type": "module",
   "scripts": {
     "dev": "mantou run src/main.tsx",
     "build": "mantou build src/main.tsx --name mantou-mail",
-    "package:linux": "bun scripts/package-linux.ts",
+    "package": "mantou package src/main.tsx",
     "test": "bun test",
     "typecheck": "bun check",
     "demo-server": "bun scripts/demo-server.ts",
     "perf": "bun test ./bench/perf.bench.tsx"
   },
+  "mantou": {
+    "name": "Mantou Mail",
+    "id": "dev.dunkbing.mantoumail",
+    "icon": "assets/icon.svg",
+    "linux": {
+      "slug": "mantou-mail",
+      "formats": [
+        "deb",
+        "tar",
+        "appimage"
+      ],
+      "categories": [
+        "Network",
+        "Email"
+      ],
+      "keywords": [
+        "mail",
+        "email",
+        "imap",
+        "inbox"
+      ],
+      "maintainer": "binh.buidang <dangbinh4869@gmail.com>"
+    },
+    "windows": {
+      "scope": "user",
+      "publisher": "binh.buidang"
+    }
+  },
   "dependencies": {
     "imapflow": "2.10.0",
     "mailparser": "3.14.1",
-    "mantou-ui": "0.4.1",
+    "mantou-ui": "0.5.0",
     "nodemailer": "10.3.1"
   },
   "devDependencies": {
