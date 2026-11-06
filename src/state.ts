@@ -1,6 +1,8 @@
 // Mantou Mail's state: Solid signals and the actions the UI and the keyboard
 // share. Nothing here knows about views.
 import { batch, createMemo, createSignal } from "mantou-ui";
+import { applyProposal, describe } from "./agent/apply";
+import type { Proposal } from "./agent/proposals";
 import { LABELS, SAMPLE_ACCOUNTS, dedupe, recipients, longDate, now, sampleMessages, threadOf, type Account, type Attachment, type Contact, type Folder, type Message } from "./data";
 
 /** What most servers take in one message (attachments are about a third bigger once encoded). */
@@ -12,6 +14,7 @@ export type Mailbox =
   | { kind: "folder"; folder: Exclude<Folder, "inbox"> }
   | { kind: "starred" }
   | { kind: "label"; id: string }
+  | { kind: "queue" }
   | { kind: "search"; query: string };
 
 /** Whether two copies of a message say the same (so the old one can stay). */
@@ -34,6 +37,7 @@ export function mailboxName(m: Mailbox, accounts: Account[] = SAMPLE_ACCOUNTS): 
     case "folder": return m.folder[0].toUpperCase() + m.folder.slice(1);
     case "starred": return "Starred";
     case "label": return LABELS.find((l) => l.id === m.id)?.name ?? m.id;
+    case "queue": return "Queue";
     case "search": return m.query ? `Results for “${m.query}”` : "Search";
   }
 }
@@ -53,6 +57,7 @@ export function inMailbox(msg: Message, m: Mailbox): boolean {
     case "folder": return msg.folder === m.folder;
     case "starred": return msg.starred && msg.folder !== "trash";
     case "label": return msg.labels.includes(m.id) && msg.folder !== "trash";
+    case "queue": return false;
     case "search": return msg.folder !== "trash" && matches(msg, m.query);
   }
 }
@@ -167,6 +172,10 @@ export interface MailOptions {
    * messages before and after: how changes reach the server.
    */
   onChange?: (prev: Message[], next: Message[]) => void;
+  /** What the agent proposed and nobody has decided yet (the Queue). */
+  proposals?: Proposal[];
+  /** A proposal was approved (with the messages it changed) or dismissed: it's kept, and approvals are logged. */
+  onDecide?: (p: Proposal, status: "approved" | "dismissed", changed: number[]) => void;
 }
 
 export function createMail(initial: Message[] = sampleMessages(), options: MailOptions = {}) {
@@ -176,6 +185,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     setMessagesRaw(next);
     options.onChange?.(prev, next);
   };
+  const [proposals, setProposals] = createSignal<Proposal[]>(options.proposals ?? []);
   const [accounts, setAccountsRaw] = createSignal<Account[]>(options.accounts ?? SAMPLE_ACCOUNTS);
   const accountOf = (id: string) => accounts().find((a) => a.id === id) ?? accounts()[0];
   /** Mail from one of your accounts. */
@@ -498,6 +508,30 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     moveToInbox() {
       if (many()) return bulk((m) => (isFiledAway(m) ? { ...m, folder: "inbox", snoozedUntil: undefined } : m), plural("Moved to Inbox"), true);
       if (selected() && isFiledAway(selected()!)) file("inbox", "Moved to Inbox", { snoozedUntil: undefined });
+    },
+    /** The Queue: what the agent proposed, oldest decision first. */
+    proposals,
+    /** The agent's pending proposals, as stored (not an undo step). */
+    receiveProposals: (list: Proposal[]) => setProposals(list),
+    /** Carries out a proposal as if by hand (undo reverses the change) and takes it off the Queue. */
+    approve(id: number) {
+      const p = proposals().find((x) => x.id === id);
+      if (!p) return;
+      const r = applyProposal(messages(), p, (name) => LABELS.find((l) => l.name.toLowerCase() === name.toLowerCase())?.id);
+      batch(() => {
+        if (r.changed.length) {
+          change(() => r.messages, `${describe(p, r.changed.length)}: ${p.reason}`);
+          if (selected() && !list().includes(selected()!)) setSelectedId(null);
+        } else setStatus("Nothing left to do for that one");
+        setProposals(proposals().filter((x) => x.id !== id));
+      });
+      options.onDecide?.(p, r.changed.length ? "approved" : "dismissed", r.changed);
+    },
+    dismiss(id: number) {
+      const p = proposals().find((x) => x.id === id);
+      if (!p) return;
+      setProposals(proposals().filter((x) => x.id !== id));
+      options.onDecide?.(p, "dismissed", []);
     },
     snooze(i: number) {
       const o = SNOOZE_OPTIONS[i];

@@ -18,7 +18,7 @@ export function StatusBar(props: { mail: Mail; remote?: Remote; onHelp: () => vo
   };
   return (
     <View style={{ flexDirection: "row", alignItems: "center", height: 28, flexShrink: 0, paddingLeft: 16, paddingRight: 12, gap: 12, backgroundColor: C.subtle }}>
-      <Text style={{ flexShrink: 1, fontSize: 12, color: C.secondary, maxLines: 1 }}>{m.status() || `${m.list().length} conversations`}</Text>
+      <Text style={{ flexShrink: 1, fontSize: 12, color: C.secondary, maxLines: 1 }}>{m.status() || (m.mailbox().kind === "queue" ? `${m.proposals().length} to review` : `${m.list().length} conversations`)}</Text>
       <Show when={m.undoable()}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, height: 22, flexShrink: 0, paddingLeft: 6, paddingRight: 6, borderRadius: 5 }} onPress={m.undo}>
           <Text style={{ fontSize: 12, fontWeight: 600, color: C.accent }}>Undo</Text>

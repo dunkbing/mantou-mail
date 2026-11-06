@@ -16,6 +16,7 @@ import { OAuthError, appProviders, hostOfMx, oauthFor, refresh, signIn, type OAu
 import { resolveMx } from "node:dns/promises";
 import { checkSmtp, compose, send as sendSmtp } from "./smtp";
 import type { Secrets } from "./secrets";
+import type { Proposal } from "../agent/proposals";
 import type { AccountConfig, Store } from "./store";
 
 /** How long a message waits in the outbox before it's sent: Undo Send takes it back meanwhile. */
@@ -394,6 +395,15 @@ export class Remote {
     sync.start();
     return sync;
   }
+
+  /** What the agent proposed and nobody has decided yet (the Queue at start). */
+  pendingProposals = (): Proposal[] => this.store.proposals("pending").reverse();
+
+  /** A decision on a proposal (Mail's onDecide): kept, and an approval goes in the action log. */
+  decide = (p: Proposal, status: "approved" | "dismissed", changed: number[]) => {
+    this.store.setProposalStatus(p.id, status);
+    if (status === "approved") this.store.addLog({ at: now(), actor: "user", proposal: p.id, action: p.kind, ids: changed, reason: p.reason });
+  };
 
   /** The app's change, as server changes (Mail's onChange). */
   onChange = (prev: Message[], next: Message[]) => {

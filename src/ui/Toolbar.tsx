@@ -50,6 +50,7 @@ export function Toolbar(props: { mail: Mail }) {
         <TabButton mail={m} tab="other" name="Other" />
       </Show>
       <View style={{ flexGrow: 1 }} />
+      <Show when={m.mailbox().kind !== "queue"}>
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Show
           when={filed()}
@@ -67,6 +68,7 @@ export function Toolbar(props: { mail: Mail }) {
         <ToolButton label="Forward" icon="forward" hint="F" onPress={m.forward} disabled={none()} compact={compact()} />
         <ToolButton label={m.selected()?.folder === "trash" ? "Delete forever" : "Delete"} icon="trash" hint="#" onPress={m.remove} disabled={none()} compact={compact()} />
       </View>
+      </Show>
     </View>
   );
 }

@@ -7,6 +7,7 @@ import { C, hline, vline } from "./ui/theme";
 import { Sidebar } from "./ui/Sidebar";
 import { Toolbar } from "./ui/Toolbar";
 import { MessageList } from "./ui/MessageList";
+import { Queue } from "./ui/Queue";
 import { Reader } from "./ui/Reader";
 import { Composer } from "./ui/Compose";
 import { Shortcuts } from "./ui/Shortcuts";
@@ -73,6 +74,11 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
       return; // keys the inputs didn't take aren't triage while a message is being written
     }
     if (e.ctrl || e.meta || e.alt) return;
+    if (m.mailbox().kind === "queue" && !help()) {
+      const first = m.proposals()[0];
+      if (first && e.key === "Enter") return m.approve(first.id);
+      if (first && e.key === "x") return m.dismiss(first.id);
+    }
     if (help()) {
       if (e.key === "Escape" || e.key === "?") setHelp(false);
       return;
@@ -133,9 +139,14 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
         <View style={hline()} />
         {/* flexBasis 0: the row's height comes from the window, not from what's scrolled inside it. */}
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
-          <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
-          <View style={vline()} />
-          <Reader mail={m} remote={props.remote} />
+          <Show
+            when={m.mailbox().kind !== "queue"}
+            fallback={<Queue mail={m} />}
+          >
+            <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
+            <View style={vline()} />
+            <Reader mail={m} remote={props.remote} />
+          </Show>
         </View>
         <View style={hline()} />
         <StatusBar mail={m} remote={props.remote} onHelp={() => setHelp(true)} />
