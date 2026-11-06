@@ -10,6 +10,7 @@ The app uses `mantou-ui` 0.5.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 |---|---|---|---|
 | A `<View dragRegion>` with no children and no background doesn't move the window (it isn't hit) | bug | [dunkbing/mantou#56](https://github.com/dunkbing/mantou/issues/56) | the strip under the traffic lights has a background |
 | Context menus on Linux and Windows (a right click, `onContextMenu`, is in 0.1.7; `showMenu` works on macOS) | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | the app draws its own row menu where Mantou has none (`src/ui/PopupMenu.tsx`): the same items, keys (Up, Down, Enter, Esc), hover, a press outside closes it |
+| `<Html>` panics the core on a stylesheet `<link>`, an `@import`, or an `<img>` with a relative or `//` address (the base URL is a `data:` URL): opening such mail crashed the app | bug | [dunkbing/mantou#87](https://github.com/dunkbing/mantou/issues/87) | `src/mail/html.ts` takes those out before the document is drawn |
 
 ## Fixed
 

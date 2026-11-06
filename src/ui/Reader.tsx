@@ -1,12 +1,13 @@
 // The reader: the selected message's conversation, and the panel under it
 // (reply, snooze, labels).
-import { For, Html, Show, Text, View, createEffect, createSignal, on, Scroll, useColorScheme, type Node } from "mantou-ui";
+import { For, Html, Show, Text, View, createEffect, createMemo, createSignal, on, Scroll, useColorScheme, type Node } from "mantou-ui";
 import { LABELS, daysSince, longDate, shortDate, type Attachment, type Message } from "../data";
 import { homedir } from "node:os";
 import type { Remote } from "../mail/remote";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
 import type { Replies } from "../agent/replies";
+import { safeHtml } from "../mail/html";
 import { isLong, type Summaries } from "../agent/summary";
 import { Avatar, Chip, LabelChips, Kbd, AttachmentChip, TextButton, linkParts } from "./common";
 import { ReplyComposer } from "./Compose";
@@ -94,6 +95,7 @@ async function fetchRemote(url: string): Promise<Uint8Array | null> {
  */
 function MailHtml(props: { html: string; remote?: Remote }) {
   const system = useColorScheme();
+  const html = createMemo(() => safeHtml(props.html)); // Workaround for dunkbing/mantou#87
   // Most mail has no dark styles: its dark text needs a light page, so it gets one (a white card) unless it asks for dark.
   const dark = () => system() === "dark" && /prefers-color-scheme/i.test(props.html);
   const scheme = () => (dark() ? "dark" : "light");
@@ -118,8 +120,8 @@ function MailHtml(props: { html: string; remote?: Remote }) {
       </Show>
       {/* Asked once per address: allowing starts a new document, which asks again. */}
       <View style={{ borderRadius: 8, overflow: "hidden", backgroundColor: dark() ? "transparent" : "#ffffff" }}>
-      <Show when={allowed()} fallback={<Html html={props.html} colorScheme={scheme()} loadImage={loader(false)} onLink={link} style={{ width: "100%" }} />}>
-        <Html html={props.html} colorScheme={scheme()} loadImage={loader(true)} onLink={link} style={{ width: "100%" }} />
+      <Show when={allowed()} fallback={<Html html={html()} colorScheme={scheme()} loadImage={loader(false)} onLink={link} style={{ width: "100%" }} />}>
+        <Html html={html()} colorScheme={scheme()} loadImage={loader(true)} onLink={link} style={{ width: "100%" }} />
       </Show>
       </View>
     </View>
