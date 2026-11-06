@@ -322,9 +322,10 @@ test("an account's signature goes under what's sent from it, not into the draft"
   mail.compose();
   mail.editDraft({ to: "jonas@example.com", subject: "Hello", body: "See you Tuesday." });
   mail.send();
+  // what the app keeps is what was written: read it before the server's copy (signature and all) syncs back
+  expect(mail.messages().find((m) => m.subject === "Hello")!.body).toEqual(["See you Tuesday."]);
   await until(() => server.smtp.received.length === 1, "the message to arrive");
   expect(server.smtp.received[0].raw).toMatch(/See you Tuesday\.\r?\n\r?\n-- \r?\nBest,\r?\nSam/);
-  expect(mail.messages().find((m) => m.subject === "Hello")!.body).toEqual(["See you Tuesday."]);
 });
 
 test("new mail is announced, once, when the window isn't focused; mail already there isn't", async () => {
