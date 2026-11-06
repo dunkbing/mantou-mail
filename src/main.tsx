@@ -10,7 +10,6 @@ import { Store } from "./mail/store";
 import { Blobs } from "./mail/blobs";
 import { join } from "node:path";
 import { createMail } from "./state";
-import { followDesktopScheme } from "./ui/desktopScheme";
 
 useRealTime();
 const dir = dataDir();
@@ -20,5 +19,3 @@ const mail = createMail(start.messages, { accounts: start.accounts, onChange: re
 void remote.attach(mail);
 
 run(() => <App mail={mail} remote={remote} />, { title: "Mantou Mail", width: 1200, height: 760, minWidth: 980, minHeight: 600, titleBar: "overlay" });
-// Linux: the light or dark appearance from the desktop (Mantou doesn't see it there yet, dunkbing/mantou#79).
-void followDesktopScheme();

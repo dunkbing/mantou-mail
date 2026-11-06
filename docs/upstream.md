@@ -8,7 +8,6 @@ The app uses `mantou-ui` 0.5.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 
 | Need | Kind | Issue | Workaround in the app |
 |---|---|---|---|
-| The colour scheme never follows the desktop's dark preference on Linux (winit has no theme on X11) | bug | [dunkbing/mantou#79](https://github.com/dunkbing/mantou/issues/79) | the app reads the XDG portal's `color-scheme` (else GNOME's) with `gdbus`/`gsettings`, follows its changes, and calls `setColorScheme` (`src/ui/desktopScheme.ts`; `scripts/fake-portal.py` to check it without a desktop) |
 | A `<View dragRegion>` with no children and no background doesn't move the window (it isn't hit) | bug | [dunkbing/mantou#56](https://github.com/dunkbing/mantou/issues/56) | the strip under the traffic lights has a background |
 | Context menus on Linux and Windows (a right click, `onContextMenu`, is in 0.1.7; `showMenu` works on macOS) | feature | Mantou's [#21](https://github.com/dunkbing/mantou/issues/21) ([the app's needs](https://github.com/dunkbing/mantou/issues/21#issuecomment-6625154743)) | the app draws its own row menu where Mantou has none (`src/ui/PopupMenu.tsx`): the same items, keys (Up, Down, Enter, Esc), hover, a press outside closes it |
 
@@ -25,6 +24,7 @@ The app uses `mantou-ui` 0.5.0 from npm. Found on Linux (Ubuntu 24.04) with Mesa
 | A `defineTheme` made before the window opens followed nothing; `defineStyle` styles didn't follow the scheme | [#54](https://github.com/dunkbing/mantou/issues/54), [#53](https://github.com/dunkbing/mantou/issues/53) | 0.3.1 | the theme follows the system without a call from the app (shared styles stay plain functions: nothing to gain from changing them back) |
 | After a context menu, pointer downs went to the right-clicked row | [#55](https://github.com/dunkbing/mantou/issues/55) | 0.3.1 | — (the app still ignores a click right after a menu closes, and keeps the held key in one variable) |
 | Rich text: spans inside `<Text>` | [#15](https://github.com/dunkbing/mantou/issues/15) | 0.3.1 | links in messages are underlined spans that open in the browser (`linkParts`, `src/ui/common.tsx`); HTML mail as rich text and a formatting composer are still to do |
+| The colour scheme never followed the desktop's dark preference on Linux | [#79](https://github.com/dunkbing/mantou/issues/79) | 0.6.0 | the app's own reader of the XDG portal is gone |
 | `<List>` with rows of different heights threw when its items got fewer | [#50](https://github.com/dunkbing/mantou/issues/50) | 0.3.1 | the message list is a `<List>` (`src/ui/MessageList.tsx`), its rows' heights known from the data (`rowHeight`) |
 | A hidden title bar that keeps macOS's traffic lights, and `win.close()` | [#52](https://github.com/dunkbing/mantou/issues/52), [#37](https://github.com/dunkbing/mantou/issues/37) | 0.2.1 | `titleBar: "overlay"` and `win.safeArea` (the app uses them on macOS) |
 | Opening a file or a URL with the system's app | [#21](https://github.com/dunkbing/mantou/issues/21) (in part), [#38](https://github.com/dunkbing/mantou/issues/38) | 0.2.0 | `openExternal` (`openWithSystem` in `src/mail/files.ts`) |

@@ -45,7 +45,7 @@
   "dependencies": {
     "imapflow": "2.10.0",
     "mailparser": "3.14.1",
-    "mantou-ui": "0.5.2",
+    "mantou-ui": "0.6.0",
     "nodemailer": "10.3.1"
   },
   "devDependencies": {

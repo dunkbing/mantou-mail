@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Updated Mantou to 0.6.0: the colour scheme follows the Linux desktop's dark preference by itself (the app's own check is gone), plus new components, motion and layout fixes.
+
 - A Queue at the top of the sidebar for what the agent suggests (archive these, label those, snooze that), each with its reason. Approve or Dismiss (Enter and X for the first); an approval is done like your own change and Undo takes it back. Nothing changes until you approve.
 
 - Formatting when writing: a bar above the text (bold, italic, link, lists, quote, code) and ⌘/Ctrl+B, I and K. Press again to undo; it works on the selection, or on the lines it touches for lists.
