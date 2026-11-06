@@ -251,9 +251,9 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
   );
 }
 
-const FORMATS: { kind: Format; label: string; hint: string; weight?: number }[] = [
-  { kind: "bold", label: "B", hint: "Bold", weight: 800 },
-  { kind: "italic", label: "I", hint: "Italic" },
+const FORMATS: { kind: Format; label: string; hint: string; weight?: number; italic?: boolean }[] = [
+  { kind: "bold", label: "B", hint: "Bold", weight: 700 },
+  { kind: "italic", label: "I", hint: "Italic", italic: true },
   { kind: "link", label: "Link", hint: "Link" },
   { kind: "bullets", label: "• List", hint: "Bulleted list" },
   { kind: "numbers", label: "1. List", hint: "Numbered list" },
@@ -290,7 +290,7 @@ function FormatBar(props: { mail: Mail; body: () => Node | undefined; focused: (
             style={{ height: 26, minWidth: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, alignItems: "center", justifyContent: "center", cursor: "pointer" }}
             onPress={() => apply(f.kind)}
           >
-            <Text style={{ fontSize: 12, fontWeight: f.weight ?? 500, color: C.secondary }}>{f.label}</Text>
+            <Text style={{ fontSize: f.weight || f.italic ? 14 : 12, fontWeight: f.weight ?? 500, fontStyle: f.italic ? "italic" : "normal", color: f.weight || f.italic ? C.text : C.secondary }}>{f.label}</Text>
           </View>
         )}
       </For>
