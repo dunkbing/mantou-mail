@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Summaries: long conversations (five messages or more, or about 1,500 words) get a Summarise button above the messages. The agent writes up to three plain lines, kept until the conversation changes. It reads only that conversation and has no tools; it asks once before reading anything.
+
 - "Review my inbox" in the Queue: an agent (Claude, through your own Claude login, no API key) looks through your mail and suggests what to archive, label or snooze, each with a reason. It can only suggest; it can't send, delete, run commands or open links. It asks once before it reads anything.
 
 - Updated Mantou to 0.6.0: the colour scheme follows the Linux desktop's dark preference by itself (the app's own check is gone), plus new components, motion and layout fixes.

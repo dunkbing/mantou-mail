@@ -79,10 +79,10 @@ function describe(u: SessionUpdate): Activity | null {
 
 /**
  * One task for an agent: connect (to a spawned program, or in-process for tests), start a session with the mail
- * tools, send the prompt, and report what happened. Proposals the agent makes are recorded by `ctx.addProposal`.
+ * tools (when given), send the prompt, and report what happened. Proposals the agent makes are recorded by `ctx.addProposal`.
  */
-export async function runAgent(target: Stream | AgentApp, opts: { ctx: ToolContext; prompt: string; cwd: string; timeoutMs?: number }): Promise<AgentRun> {
-  const mcp = startMailMcp(opts.ctx);
+export async function runAgent(target: Stream | AgentApp, opts: { ctx?: ToolContext; prompt: string; cwd: string; timeoutMs?: number }): Promise<AgentRun> {
+  const mcp = opts.ctx ? startMailMcp(opts.ctx) : undefined; // no tools at all for a task that only needs words back
   const run: AgentRun = { stopReason: "", text: "", activity: [], denied: [] };
   const app = client({ name: "mantou-mail" })
     .onRequest(methods.client.session.requestPermission, ({ params }) => {
@@ -102,7 +102,7 @@ export async function runAgent(target: Stream | AgentApp, opts: { ctx: ToolConte
     });
   const session: NewSessionRequest = {
     cwd: opts.cwd,
-    mcpServers: [{ type: "http", name: SERVER_NAME, url: mcp.url, headers: [{ name: "Authorization", value: `Bearer ${mcp.token}` }] }],
+    mcpServers: mcp ? [{ type: "http", name: SERVER_NAME, url: mcp.url, headers: [{ name: "Authorization", value: `Bearer ${mcp.token}` }] }] : [],
     // For the Claude adapter: no built-in tools (no shell, files or web) and none of the person's own settings.
     _meta: { claudeCode: { options: { tools: [], settingSources: [] } } },
   };
@@ -119,6 +119,6 @@ export async function runAgent(target: Stream | AgentApp, opts: { ctx: ToolConte
     return run;
   } finally {
     clearTimeout(timer);
-    mcp.stop();
+    mcp?.stop();
   }
 }

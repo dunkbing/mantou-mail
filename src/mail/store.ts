@@ -38,6 +38,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS pending (seq INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, op TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS windows (account TEXT NOT NULL, folder TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (account, folder));
       CREATE TABLE IF NOT EXISTS proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS summaries (key TEXT PRIMARY KEY, version TEXT NOT NULL, text TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS action_log (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL);
     `);
   }
@@ -137,6 +138,15 @@ export class Store {
     const row = this.db.query<{ data: string }, [number]>("SELECT data FROM proposals WHERE id = ?").get(id);
     if (!row) return;
     this.db.query("UPDATE proposals SET status = ?, data = ? WHERE id = ?").run(status, JSON.stringify({ ...JSON.parse(row.data), status }), id);
+  }
+
+  /** A conversation's summary, if one was written for this version of it. */
+  summary(key: string, version: string): string | undefined {
+    return this.db.query<{ text: string }, [string, string]>("SELECT text FROM summaries WHERE key = ? AND version = ?").get(key, version)?.text;
+  }
+
+  putSummary(key: string, version: string, text: string) {
+    this.db.query("INSERT OR REPLACE INTO summaries (key, version, text) VALUES (?, ?, ?)").run(key, version, text);
   }
 
   /** The action log, newest first. */

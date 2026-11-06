@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import type { Remote } from "../mail/remote";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
+import { isLong, type Summaries } from "../agent/summary";
 import { Avatar, Chip, LabelChips, Kbd, AttachmentChip, TextButton, linkParts } from "./common";
 import { ReplyComposer } from "./Compose";
 import { Icon } from "./icons";
@@ -178,7 +179,32 @@ export function Panel(props: { mail: Mail; remote?: Remote }) {
   );
 }
 
-export function Reader(props: { mail: Mail; remote?: Remote }) {
+/** A long conversation's summary, or a button to write one (it sends the conversation to the agent, so it's asked for). */
+function SummaryCard(props: { summaries: Summaries; conversation: Message[] }) {
+  const s = props.summaries;
+  const text = () => s.cached(props.conversation);
+  const busy = () => s.running() !== null;
+  return (
+    <View style={{ gap: 6, padding: 12, borderRadius: 8, backgroundColor: C.faint }}>
+      <Show
+        when={text()}
+        fallback={
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 12, color: C.secondary }}>{s.running() ? "Reading the conversation…" : s.note() || "Long conversation."}</Text>
+            <View style={{ opacity: busy() ? 0.5 : 1 }}>
+              <TextButton label="Summarise" onPress={() => void s.run(props.conversation)} />
+            </View>
+          </View>
+        }
+      >
+        <Text style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>SUMMARY</Text>
+        <Text selectable style={{ fontSize: 13, lineHeight: 1.5, color: C.body }}>{text()}</Text>
+      </Show>
+    </View>
+  );
+}
+
+export function Reader(props: { mail: Mail; remote?: Remote; summaries?: Summaries }) {
   const m = props.mail;
   let scroll: Node | undefined;
   /** Messages of the conversation opened by pressing them (the selected one is always open). */
@@ -233,6 +259,9 @@ export function Reader(props: { mail: Mail; remote?: Remote }) {
                 </Show>
                 <LabelChips message={m.selected()!} />
               </View>
+            </Show>
+            <Show when={props.summaries && isLong(m.conversation())}>
+              <SummaryCard summaries={props.summaries!} conversation={m.conversation()} />
             </Show>
             <For each={m.conversation()}>
               {(msg) => (
