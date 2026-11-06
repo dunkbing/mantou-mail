@@ -5,6 +5,7 @@ import { usesTabs, type Mail } from "../state";
 import { C, hline, small } from "./theme";
 import { Avatar, Chip, LabelChips } from "./common";
 import { Icon, type IconName } from "./icons";
+import { listWidth } from "./layout";
 import { ROW_MENU } from "./menu";
 import { contextMenu, menus } from "./PopupMenu";
 import type { Remote } from "../mail/remote";
@@ -118,11 +119,14 @@ export function Row(props: { mail: Mail; message: Message; onMenu: (message: Mes
   );
 }
 
-export function EmptyList(props: { mail: Mail }) {
+export function EmptyList(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
   const text = () => {
     const box = m.mailbox();
     if (box.kind === "search") return box.query ? [`No messages match “${box.query}”`, "Search looks at senders, subjects and text, in every folder but Trash."] : ["Search your mail", "Type to search · Enter keeps the results · Esc goes back"];
+    // Mail still on its way: say so, rather than that there's none.
+    const loading = Object.values(props.remote?.statuses() ?? {}).some((s) => s.state === "connecting" || s.state === "syncing");
+    if (loading && usesTabs(box)) return ["Loading your mail…", "Fetching from the server."];
     if (usesTabs(box)) return ["You're all caught up", m.tab() === "important" ? "Nothing left in Important." : "Nothing left in Other."];
     return ["Nothing here", ""];
   };
@@ -204,12 +208,12 @@ export function MessageList(props: { mail: Mail; remote?: Remote; onCommand: (id
     if (i >= 0 && list && !list.node.released) untrack(() => list!.scrollToIndex(i));
   });
   return (
-    <Show when={m.list().length > 0} fallback={<View style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }}><EmptyList mail={m} /></View>}>
+    <Show when={m.list().length > 0} fallback={<View style={{ width: listWidth(), flexShrink: 0, backgroundColor: C.surface }}><EmptyList mail={m} remote={props.remote} /></View>}>
       <List
         each={items()}
         itemHeight={(it) => (it === OLDER ? OLDER_HEIGHT : rowHeight(m, it))}
         ref={(l) => (list = l)}
-        style={{ width: 400, flexShrink: 0, backgroundColor: C.surface }}
+        style={{ width: listWidth(), flexShrink: 0, backgroundColor: C.surface }}
       >
         {(item) => (
           <Show when={item() !== OLDER} fallback={<LoadOlder mail={m} remote={props.remote!} />}>

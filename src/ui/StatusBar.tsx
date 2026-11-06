@@ -2,7 +2,7 @@
 import { Show, Text, View } from "mantou-ui";
 import { type Mail } from "../state";
 import { C, small } from "./theme";
-import { Kbd } from "./common";
+import { Kbd, Pulse } from "./common";
 import { STATE_COLOR } from "./Accounts";
 import { Icon } from "./icons";
 import type { Remote } from "../mail/remote";
@@ -28,7 +28,9 @@ export function StatusBar(props: { mail: Mail; remote?: Remote; onHelp: () => vo
       <View style={{ flexGrow: 1 }} />
       <Show when={sync()}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
-          <View style={{ width: 7, height: 7, borderRadius: 3.5, flexShrink: 0, backgroundColor: STATE_COLOR[sync()?.state ?? "ready"] }} />
+          <Show when={sync()?.state === "connecting" || sync()?.state === "syncing"} fallback={<View style={{ width: 7, height: 7, borderRadius: 3.5, flexShrink: 0, backgroundColor: STATE_COLOR[sync()?.state ?? "ready"] }} />}>
+            <Pulse color={STATE_COLOR[sync()?.state ?? "ready"]} size={7} />
+          </Show>
           <Text style={[small(), { flexShrink: 1, maxLines: 1 }]}>{sync()?.detail ?? ""}</Text>
         </View>
       </Show>

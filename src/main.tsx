@@ -6,6 +6,7 @@ import { useRealTime } from "./data";
 import { dataDir } from "./mail/paths";
 import { Remote } from "./mail/remote";
 import { osSecrets } from "./mail/secrets";
+import { restoreListWidth } from "./ui/layout";
 import { Store } from "./mail/store";
 import { Blobs } from "./mail/blobs";
 import { join } from "node:path";
@@ -18,7 +19,9 @@ import { createMail } from "./state";
 
 useRealTime();
 const dir = dataDir();
-const remote = new Remote(new Store(dir), osSecrets, { blobs: new Blobs(join(dir, "attachments")) });
+const store = new Store(dir);
+restoreListWidth(store.setting("listWidth") === undefined ? undefined : Number(store.setting("listWidth")), (n) => store.putSetting("listWidth", String(n)));
+const remote = new Remote(store, osSecrets, { blobs: new Blobs(join(dir, "attachments")) });
 const start = remote.initial();
 const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange, proposals: remote.pendingProposals(), onDecide: remote.decide, onUndo: remote.undoDecision });
 void remote.attach(mail);

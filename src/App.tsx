@@ -12,6 +12,7 @@ import type { Summaries } from "./agent/summary";
 import type { Triage } from "./agent/triage";
 import type { Ask } from "./agent/ask";
 import { AskView } from "./ui/Ask";
+import { ResizeHandle } from "./ui/ResizeHandle";
 import { Queue } from "./ui/Queue";
 import { Reader } from "./ui/Reader";
 import { Composer } from "./ui/Compose";
@@ -149,7 +150,7 @@ export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summ
             fallback={m.mailbox().kind === "ask" ? <AskView mail={m} ask={props.ask} /> : <Queue mail={m} triage={props.triage} />}
           >
             <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
-            <View style={vline()} />
+            <ResizeHandle />
             <Reader mail={m} remote={props.remote} summaries={props.summaries} replies={props.replies} />
           </Show>
         </View>

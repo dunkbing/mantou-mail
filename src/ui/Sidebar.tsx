@@ -3,12 +3,12 @@ import { For, Input, Show, Text, View, win, type Node } from "mantou-ui";
 import { LABELS } from "../data";
 import { sameMailbox, type Mail, type Mailbox } from "../state";
 import { C, caption, buttonShadow } from "./theme";
-import { Kbd } from "./common";
+import { Kbd, Pulse } from "./common";
 import { Icon, type IconName } from "./icons";
 import { STATE_COLOR } from "./Accounts";
 import type { Remote } from "../mail/remote";
 
-export function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; icon?: IconName; count?: number; dot?: string; indent?: boolean }) {
+export function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string; icon?: IconName; count?: number; dot?: string; pulse?: boolean; indent?: boolean }) {
   const active = () => sameMailbox(props.mail.mailbox(), props.mailbox);
   return (
     <View
@@ -20,7 +20,9 @@ export function SidebarItem(props: { mail: Mail; mailbox: Mailbox; name: string;
       </Show>
       <Show when={props.dot}>
         <View style={{ width: props.indent ? 8 : 16, height: 8, flexShrink: 0, alignItems: "center" }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: props.dot ?? "transparent" }} />
+          <Show when={props.pulse} fallback={<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: props.dot ?? "transparent" }} />}>
+            <Pulse color={props.dot ?? "transparent"} />
+          </Show>
         </View>
       </Show>
       <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 13, fontWeight: active() ? 600 : 500, color: active() ? C.accent : C.text, maxLines: 1 }}>{props.name}</Text>
@@ -89,11 +91,11 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
       <For each={m.accounts()}>
         {(a) => {
           // A dot for an account that isn't up to date (syncing, offline, needs its password).
-          const dot = () => {
-            const s = props.remote?.statuses()[a.id]?.state;
-            return s && s !== "ready" ? STATE_COLOR[s] : undefined;
-          };
-          return <SidebarItem mail={m} mailbox={{ kind: "account", id: a.id }} name={a.name} dot={dot()} count={m.unread({ kind: "account", id: a.id })} indent />;
+          const state = () => props.remote?.statuses()[a.id]?.state;
+          // The dot's room is kept when it isn't shown, so names don't move when a sync ends.
+          const dot = () => (props.remote ? (state() && state() !== "ready" ? STATE_COLOR[state()!] : "transparent") : undefined);
+          const busy = () => state() === "connecting" || state() === "syncing";
+          return <SidebarItem mail={m} mailbox={{ kind: "account", id: a.id }} name={a.name} dot={dot()} pulse={busy()} count={m.unread({ kind: "account", id: a.id })} indent />;
         }}
       </For>
       <Show when={props.remote}>

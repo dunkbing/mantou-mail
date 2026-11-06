@@ -1,5 +1,5 @@
 // Small pieces used all over: avatars, chips, key hints, buttons.
-import { For, Show, Text, View } from "mantou-ui";
+import { For, Show, Text, View, onCleanup, type Node } from "mantou-ui";
 import { Icon } from "./icons";
 import { LABELS, type Attachment, type Message } from "../data";
 import { SEND_KEYS, C, AVATAR_COLORS } from "./theme";
@@ -108,4 +108,18 @@ export function linkParts(text: string): { text: string; url?: string }[] {
   }
   if (last < text.length) parts.push({ text: text.slice(last) });
   return parts;
+}
+
+/** A dot that breathes while something is in progress (a sync): the core animates it, with nothing run per frame. */
+export function Pulse(props: { color: string; size?: number }) {
+  const size = props.size ?? 8;
+  return (
+    <View
+      ref={(n: Node) => {
+        const a = n.animate("opacity", { from: 1, to: 0.25, duration: 700, iterations: Infinity, alternate: true });
+        onCleanup(() => a.stop());
+      }}
+      style={{ width: size, height: size, borderRadius: size / 2, flexShrink: 0, backgroundColor: props.color }}
+    />
+  );
 }

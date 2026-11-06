@@ -4,6 +4,9 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Drag the line between the message list and the reader to change the list's width (double-click it to reset); the width is kept.
+- While an account syncs its dot and the one in the status bar pulse, the empty list says "Loading your mail…", and account names no longer shift when the dot goes.
+
 - Fixed a crash when opening some HTML mail (ones that load web fonts or stylesheets, or have images with relative addresses).
 
 - Undoing (⌘Z/z) something you approved in the Queue now also marks the suggestion as undone and writes that in the action log.
