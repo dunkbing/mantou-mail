@@ -103,3 +103,18 @@ test("a proposal's kind can be none of the agent's own invention: the types admi
   const bad: Proposal["kind"] = "send";
   expect([p, bad].length).toBe(2);
 });
+
+test("search can list a folder or unread mail without a query, and rejects bad filters", () => {
+  const { ctx } = setup([
+    msg({ id: 1, folder: "inbox", unread: true, subject: "A" }),
+    msg({ id: 2, folder: "inbox", unread: false, subject: "B" }),
+    msg({ id: 3, folder: "archive", unread: false, subject: "C" }),
+  ]);
+  const ids = (a: unknown) => [...callTool(ctx, "search_mail", a).text.matchAll(/#(\d+) /g)].map((m) => Number(m[1])).sort();
+  expect(ids({ folder: "inbox" })).toEqual([1, 2]);
+  expect(ids({ folder: "inbox", unread: false })).toEqual([2]);
+  expect(ids({})).toEqual([1, 2, 3]);
+  expect(callTool(ctx, "search_mail", { folder: "trash" }).isError).toBe(true);
+  expect(callTool(ctx, "search_mail", { unread: "yes" }).isError).toBe(true);
+  expect(callTool(ctx, "search_mail", { query: 5 }).isError).toBe(true);
+});

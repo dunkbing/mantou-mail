@@ -7,6 +7,7 @@ import { C, hline, vline } from "./ui/theme";
 import { Sidebar } from "./ui/Sidebar";
 import { Toolbar } from "./ui/Toolbar";
 import { MessageList } from "./ui/MessageList";
+import type { Triage } from "./agent/triage";
 import { Queue } from "./ui/Queue";
 import { Reader } from "./ui/Reader";
 import { Composer } from "./ui/Compose";
@@ -17,7 +18,7 @@ import type { Remote } from "./mail/remote";
 import { APP_MENU, type Command } from "./ui/menu";
 import { PopupHost, popupOpen } from "./ui/PopupMenu";
 
-export function App(props: { mail?: Mail; remote?: Remote }) {
+export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage }) {
   const m = props.mail ?? createMail();
   const ui = useUi();
   const [help, setHelp] = createSignal(false);
@@ -141,7 +142,7 @@ export function App(props: { mail?: Mail; remote?: Remote }) {
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
           <Show
             when={m.mailbox().kind !== "queue"}
-            fallback={<Queue mail={m} />}
+            fallback={<Queue mail={m} triage={props.triage} />}
           >
             <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
             <View style={vline()} />

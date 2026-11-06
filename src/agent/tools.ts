@@ -13,8 +13,17 @@ export interface ToolSpec {
 export const TOOLS: ToolSpec[] = [
   {
     name: "search_mail",
-    description: "Searches the person's mail (every word must appear in the sender, subject or body). Returns message ids, senders, dates and snippets.",
-    input: { type: "object", properties: { query: { type: "string" }, limit: { type: "number", description: "At most 50 (default 20)" } }, required: ["query"] },
+    description: "Searches the person's mail (every word of the query must appear in the sender, subject or body; no query lists everything that matches the filters), newest first. Returns message ids, senders, dates and snippets.",
+    input: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        folder: { type: "string", enum: ["inbox", "archive", "sent", "snoozed"], description: "Only this folder" },
+        unread: { type: "boolean", description: "Only unread (true) or only read (false) mail" },
+        limit: { type: "number", description: "At most 50 (default 20)" },
+      },
+      required: [],
+    },
   },
   {
     name: "read_thread",
@@ -77,10 +86,15 @@ export function callTool(ctx: ToolContext, name: string, args: unknown): ToolRes
   if (!isRecord(args)) return err("arguments must be an object");
   switch (name) {
     case "search_mail": {
-      if (typeof args.query !== "string" || !args.query.trim()) return err("query must be a non-empty string");
+      const query = typeof args.query === "string" ? args.query : "";
+      if (args.query !== undefined && typeof args.query !== "string") return err("query must be a string");
+      const folders = ["inbox", "archive", "sent", "snoozed"];
+      if (args.folder !== undefined && (typeof args.folder !== "string" || !folders.includes(args.folder))) return err(`folder must be one of: ${folders.join(", ")}`);
+      if (args.unread !== undefined && typeof args.unread !== "boolean") return err("unread must be true or false");
       const limit = Math.min(50, Math.max(1, typeof args.limit === "number" ? Math.floor(args.limit) : 20));
-      const words = args.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
       const hits = visible(ctx)
+        .filter((m) => (args.folder === undefined || m.folder === args.folder) && (args.unread === undefined || m.unread === args.unread))
         .filter((m) => {
           const hay = [m.from.name, m.from.email, m.subject, ...m.body].join("\n").toLowerCase();
           return words.every((w) => hay.includes(w));

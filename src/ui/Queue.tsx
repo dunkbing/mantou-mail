@@ -2,6 +2,7 @@
 import { For, Show, Text, View, Scroll } from "mantou-ui";
 import type { Proposal } from "../agent/proposals";
 import { longDate, type Message } from "../data";
+import type { Triage } from "../agent/triage";
 import type { Mail } from "../state";
 import { C, hline } from "./theme";
 
@@ -52,21 +53,32 @@ function Card(props: { mail: Mail; proposal: Proposal; first: boolean }) {
   );
 }
 
-export function Queue(props: { mail: Mail }) {
+export function Queue(props: { mail: Mail; triage?: Triage }) {
   const m = props.mail;
+  const t = () => props.triage;
+  const ask = () => (
+    <Show when={t()}>
+      <View style={{ opacity: t()!.running() ? 0.5 : 1 }}>{button(t()!.running() ? "Reviewing…" : "Review my inbox", false, () => void t()!.run())}</View>
+    </Show>
+  );
   return (
     <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0 }}>
       <Show
         when={m.proposals().length}
         fallback={
-          <View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
             <Text style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nothing waiting</Text>
             <Text style={{ fontSize: 13, color: C.muted }}>What the agent suggests shows up here, for you to approve.</Text>
+            {ask()}
+            <Show when={t()?.note()}>
+              <Text style={{ fontSize: 12, color: C.muted }}>{t()!.note()}</Text>
+            </Show>
           </View>
         }
       >
-        <View style={{ flexDirection: "row", alignItems: "center", height: 40, paddingLeft: 20, paddingRight: 20 }}>
-          <Text style={{ flexGrow: 1, fontSize: 12, color: C.muted }}>{m.proposals().length} to review. Nothing changes until you approve it.</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, height: 48, paddingLeft: 20, paddingRight: 20 }}>
+          <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 12, color: C.muted }}>{t()?.note() || `${m.proposals().length} to review. Nothing changes until you approve it.`}</Text>
+          {ask()}
         </View>
         <View style={hline()} />
         <Scroll style={{ flexGrow: 1, flexBasis: 0, minHeight: 0 }} contentStyle={{ padding: 20, gap: 12 }}>

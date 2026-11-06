@@ -43,6 +43,7 @@
     }
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "2.4.0",
     "imapflow": "2.10.0",
     "mailparser": "3.14.1",
     "mantou-ui": "0.6.0",
