@@ -418,3 +418,44 @@ test("a message's HTML is drawn by the core: styled, links open in the browser, 
   h.press(text(h, "Load pictures"));
   expect(texts(h)).not.toContain("Pictures from the web are blocked, so the sender can't tell you opened this.");
 });
+
+test("HTML mail sits on a white page, lays out tables, and its text can be selected and copied", async () => {
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets());
+  cleanup.push(() => remote.stop());
+  const base = sampleMessages().find((m) => m.folder === "inbox" && m.important)!;
+  const html = `<body style="margin:0"><table width="100%"><tr><td width="50%" style="background:#ff0000">&nbsp;</td><td width="50%" style="background:#0000ff">&nbsp;</td></tr></table><p style="font-size:24px;margin:20px">Selectable words here</p></body>`;
+  const mail = createMail([{ ...base, body: ["Selectable words here"], html }], { onChange: remote.onChange });
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  cleanup.push(mount(h.ui, () => <App mail={mail} remote={remote} />));
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(10));
+  const shot = h.capture();
+  const find = (match: (r: number, g: number, b: number) => boolean): [number, number] | null => {
+    for (let y = 80; y < 700; y += 2) for (let x = 650; x < 1190; x += 2) {
+      const [r, g, b] = shot.at(x, y);
+      if (match(r, g, b)) return [x, y];
+    }
+    return null;
+  };
+  const red = find((r, g, b) => r > 240 && g < 20 && b < 20);
+  const blue = find((r, g, b) => b > 240 && r < 20 && g < 20);
+  expect(red).not.toBeNull(); // the table's cells are side by side, on one row
+  expect(blue).not.toBeNull();
+  expect(blue![0]).toBeGreaterThan(red![0]);
+  expect(Math.abs(blue![1] - red![1])).toBeLessThan(4);
+  // the paragraph's text: dark pixels on the white page, below the table
+  let ink: [number, number] | null = null;
+  for (let y = red![1] + 20; y < 700 && !ink; y++) for (let x = 650; x < 1190 && !ink; x++) {
+    const [r, g, b] = shot.at(x, y);
+    if (r < 60 && g < 60 && b < 60) ink = [x, y];
+  }
+  expect(ink).not.toBeNull();
+  h.pointer("down", ink![0], ink![1] + 6);
+  for (let dx = 20; dx <= 400; dx += 20) h.pointer("move", ink![0] + dx, ink![1] + 6);
+  h.pointer("up", ink![0] + 400, ink![1] + 6);
+  h.key("c", { primary: true });
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(10));
+  expect(h.clipboard).toContain("Selectable");
+});
