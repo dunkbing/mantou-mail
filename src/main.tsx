@@ -20,7 +20,7 @@ useRealTime();
 const dir = dataDir();
 const remote = new Remote(new Store(dir), osSecrets, { blobs: new Blobs(join(dir, "attachments")) });
 const start = remote.initial();
-const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange, proposals: remote.pendingProposals(), onDecide: remote.decide });
+const mail = createMail(start.messages, { accounts: start.accounts, onChange: remote.onChange, proposals: remote.pendingProposals(), onDecide: remote.decide, onUndo: remote.undoDecision });
 void remote.attach(mail);
 // The agent (Claude through ACP, with the person's own login) reads mail only after they've agreed once.
 let agreed = false;

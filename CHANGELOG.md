@@ -4,6 +4,8 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Undoing (⌘Z/z) something you approved in the Queue now also marks the suggestion as undone and writes that in the action log.
+
 - Ask: a new Ask place in the sidebar answers a question from your mail and lists the messages it came from; press one to open it. The agent can search and read, and nothing more; it asks once before reading.
 
 - Suggest replies: the reply box has a Suggest replies button. The agent offers three short replies as chips in place of the fixed ones; pressing one adds it to the reply, which you still edit and send yourself. Same consent and no tools as summaries.

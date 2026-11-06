@@ -179,6 +179,8 @@ export interface MailOptions {
   proposals?: Proposal[];
   /** A proposal was approved (with the messages it changed) or dismissed: it's kept, and approvals are logged. */
   onDecide?: (p: Proposal, status: "approved" | "dismissed", changed: number[]) => void;
+  /** An approved proposal's change was undone (⌘Z): the proposal and the action log say so. */
+  onUndo?: (p: Proposal, changed: number[]) => void;
 }
 
 export function createMail(initial: Message[] = sampleMessages(), options: MailOptions = {}) {
@@ -217,7 +219,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   const [draft, setDraft] = createSignal<Draft>({ kind: "new", id: null, account: accounts()[0]?.id ?? "", to: "", subject: "", body: "" });
   /** Where Escape goes back to from a search. */
   let beforeSearch: Mailbox = { kind: "all" };
-  const history: { messages: Message[]; selectedId: number | null }[] = [];
+  const history: { messages: Message[]; selectedId: number | null; undone?: () => void }[] = [];
 
   const list = createMemo(() => {
     const m = mailbox();
@@ -255,8 +257,8 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
   const nextId = () => Math.max(0, ...messages().map((m) => m.id)) + 1;
 
   /** Changes messages; the previous state goes on the undo stack. */
-  function change(fn: (ms: Message[]) => Message[], message: string) {
-    history.push({ messages: messages(), selectedId: selected()?.id ?? null });
+  function change(fn: (ms: Message[]) => Message[], message: string, undone?: () => void) {
+    history.push({ messages: messages(), selectedId: selected()?.id ?? null, undone });
     if (history.length > 50) history.shift();
     setMessages(fn(messages()));
     setStatus(message, true);
@@ -532,7 +534,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       const r = applyProposal(messages(), p, (name) => LABELS.find((l) => l.name.toLowerCase() === name.toLowerCase())?.id);
       batch(() => {
         if (r.changed.length) {
-          change(() => r.messages, `${describe(p, r.changed.length)}: ${p.reason}`);
+          change(() => r.messages, `${describe(p, r.changed.length)}: ${p.reason}`, () => options.onUndo?.(p, r.changed));
           if (selected() && !list().includes(selected()!)) setSelectedId(null);
         } else setStatus("Nothing left to do for that one");
         setProposals(proposals().filter((x) => x.id !== id));
@@ -762,6 +764,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
         setSelectedId(prev.selectedId);
         setStatus("Undone");
       });
+      prev.undone?.();
     },
 
     // Search: the search field's focus and text drive these.

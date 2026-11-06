@@ -102,3 +102,26 @@ test("decisions are kept: status in the store, and an approval in the action log
   remote.stop();
   store.close();
 });
+
+test("undoing an approval puts the mail back and marks the proposal and the log, once", () => {
+  const store = new Store(":memory:");
+  const remote = new Remote(store, memorySecrets());
+  const [a] = inbox();
+  const p = store.addProposal({ kind: "archive", ids: [a], reason: "Read receipt" }, new Date("2026-11-06T09:00:00Z"));
+  const mail = createMail(sampleMessages(), { proposals: [p], onDecide: remote.decide, onUndo: remote.undoDecision });
+  mail.approve(p.id);
+  expect(mail.messages().find((m) => m.id === a)!.folder).toBe("archive");
+  mail.undo();
+  expect(mail.messages().find((m) => m.id === a)!.folder).toBe("inbox");
+  expect(store.proposals("undone").map((x) => x.id)).toEqual([p.id]);
+  expect(store.log().map((e) => e.action)).toEqual(["undo archive", "archive"]);
+  mail.undo(); // nothing more to undo: no second entry
+  expect(store.log()).toHaveLength(2);
+  // an ordinary undo (not an approval) leaves the log alone
+  mail.select(a);
+  mail.archive();
+  mail.undo();
+  expect(store.log()).toHaveLength(2);
+  remote.stop();
+  store.close();
+});

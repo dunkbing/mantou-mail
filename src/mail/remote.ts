@@ -405,6 +405,12 @@ export class Remote {
     if (status === "approved") this.store.addLog({ at: now(), actor: "user", proposal: p.id, action: p.kind, ids: changed, reason: p.reason });
   };
 
+  /** An approved proposal's change was undone: it's marked so, and the action log says who undid it. */
+  undoDecision = (p: Proposal, changed: number[]) => {
+    this.store.setProposalStatus(p.id, "undone");
+    this.store.addLog({ at: now(), actor: "user", proposal: p.id, action: `undo ${p.kind}`, ids: changed, reason: p.reason });
+  };
+
   /** The app's change, as server changes (Mail's onChange). */
   onChange = (prev: Message[], next: Message[]) => {
     const before = new Map(prev.map((m) => [m.id, m]));

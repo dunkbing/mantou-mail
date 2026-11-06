@@ -14,7 +14,7 @@ export interface Proposal {
   reason: string;
   /** For "label": the label's name; for "snooze": when it comes back (ISO time). */
   value?: string;
-  status: "pending" | "approved" | "dismissed";
+  status: "pending" | "approved" | "dismissed" | "undone";
   createdAt: Date;
 }
 
