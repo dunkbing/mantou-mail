@@ -10,6 +10,8 @@ export interface Parsed {
   bcc: Contact[];
   subject: string;
   body: string[];
+  /** The message's HTML part, its inline images (cid:) made data: URLs; the app draws it with Mantou's <Html>. */
+  html?: string;
   date: Date;
   /** People and security mail; newsletters, notifications and receipts are "Other". */
   important: boolean;
@@ -77,6 +79,20 @@ export function threadKeyOf(opts: { serverThreadId?: string; messageId?: string;
   return root ? `m:${angle(root)}` : fallback;
 }
 
+/** The HTML part with its inline images inside it (up to a budget), or nothing when there is none or it's huge. */
+export function htmlOf(p: { html?: string | false; attachments?: { contentId?: string; contentType: string; content: Buffer; size: number }[] }): string | undefined {
+  if (!p.html) return undefined;
+  const byCid = new Map((p.attachments ?? []).filter((a) => a.contentId && a.contentType.startsWith("image/")).map((a) => [a.contentId!.replace(/^<|>$/g, ""), a]));
+  let budget = 1_500_000;
+  const html = p.html.replace(/cid:([^"'\s)>]+)/gi, (m, id: string) => {
+    const a = byCid.get(decodeURIComponent(id));
+    if (!a || a.size > budget) return m;
+    budget -= a.size;
+    return `data:${a.contentType};base64,${a.content.toString("base64")}`;
+  });
+  return html.length > 3_000_000 ? undefined : html;
+}
+
 /** Parses a raw message (as fetched with `source`). */
 export async function parseMessage(source: Buffer | string, opts: { serverThreadId?: string; internalDate?: Date; fallbackKey: string }): Promise<Parsed> {
   const p = await simpleParser(source, { skipImageLinks: true, skipTextToHtml: true, skipTextLinks: true });
@@ -90,6 +106,7 @@ export async function parseMessage(source: Buffer | string, opts: { serverThread
     bcc: addresses(p.bcc),
     subject,
     body: paragraphsOf(p.text ?? ""),
+    html: htmlOf(p),
     date: p.date ?? opts.internalDate ?? new Date(),
     important: isImportant(from.email, subject, p.headers as Map<string, unknown>),
     messageId: p.messageId ? angle(p.messageId) : undefined,

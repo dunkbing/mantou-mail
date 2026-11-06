@@ -379,6 +379,7 @@ export class AccountSync {
               ...(p.bcc.length ? { bcc: p.bcc } : {}),
               subject: p.subject,
               body: p.body,
+              ...(p.html ? { html: p.html } : {}),
               date: p.date,
               unread: !flags.has("\\Seen"),
               starred: flags.has("\\Flagged"),

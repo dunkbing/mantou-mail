@@ -389,3 +389,32 @@ test("web links in a message are highlighted and open in the browser when presse
   h.press([para[0] + 4, para[1] + 10]); // on "Details": not a link
   expect(opened).toEqual(["https://example.com/plan"]);
 });
+
+test("a message's HTML is drawn by the core: styled, links open in the browser, pictures from the web wait to be allowed", async () => {
+  const opened: string[] = [];
+  const store = new Store(":memory:");
+  cleanup.push(() => store.close());
+  const remote = new Remote(store, memorySecrets(), { openUrl: (u) => void opened.push(u) });
+  cleanup.push(() => remote.stop());
+  const base = sampleMessages().find((m) => m.folder === "inbox" && m.important)!;
+  const html = `<body style="margin:0"><p style="font-size:30px;margin:30px"><a href="https://example.com/run/1" style="color:#1f883d">View workflow run</a></p><img src="https://tracker.example/p.png" width="10" height="10"></body>`;
+  const mail = createMail([{ ...base, body: ["View workflow run"], html }], { onChange: remote.onChange });
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  cleanup.push(() => h.free());
+  cleanup.push(mount(h.ui, () => <App mail={mail} remote={remote} />));
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(10));
+  // the green button is on screen (the plain text isn't: the HTML replaced it)
+  const shot = h.capture();
+  let green: [number, number] | null = null;
+  for (let y = 80; y < 700 && !green; y += 2) for (let x = 650; x < 1190 && !green; x += 2) {
+    const [r, g, b] = shot.at(x, y);
+    if (g > 110 && r < 90 && b < 110 && g - r > 50) green = [x, y];
+  }
+  expect(green).not.toBeNull();
+  expect(texts(h)).toContain("Pictures from the web are blocked, so the sender can't tell you opened this.");
+  h.press(green!); // the link
+  for (let i = 0; i < 5; i++) (h.step(), await Bun.sleep(10));
+  expect(opened).toEqual(["https://example.com/run/1"]);
+  h.press(text(h, "Load pictures"));
+  expect(texts(h)).not.toContain("Pictures from the web are blocked, so the sender can't tell you opened this.");
+});

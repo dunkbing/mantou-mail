@@ -4,6 +4,9 @@ User-visible changes, one line each, newest first. Format: [Keep a Changelog](ht
 
 ## Unreleased
 
+- Mail with HTML (newsletters, GitHub notifications, receipts) now shows as designed: layout, colours, buttons, tables and the pictures inside the message. Pictures from the web stay blocked until you press "Load pictures"; links open in your browser.
+- Updated Mantou to 0.4.1: `<Html>`, which draws a static HTML/CSS document in the core (no scripts, nothing fetched but through the app).
+
 - Linux: Mantou Mail comes as a .deb and as a .tar.gz with an install script, with its own icon and an entry in the applications menu.
 - Big mailboxes scroll and switch faster: the message list only draws the rows in view (2,000 messages: about a third of the work to open, a tenth to switch mailboxes).
 - Linux: right-clicking a message opens its menu (reply, archive, snooze, label and the rest), drawn by the app; arrow keys, Enter and Esc work in it.

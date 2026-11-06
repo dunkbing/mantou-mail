@@ -77,6 +77,8 @@ export interface Message {
   from: Contact;
   subject: string;
   body: string[];
+  /** The HTML part, when the message has one (shown with <Html>; `body` is its text). */
+  html?: string;
   date: Date;
   unread: boolean;
   starred: boolean;

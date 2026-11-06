@@ -1,12 +1,12 @@
 // The reader: the selected message's conversation, and the panel under it
 // (reply, snooze, labels).
-import { For, Show, Text, View, createEffect, createSignal, on, Scroll, type Node } from "mantou-ui";
+import { For, Html, Show, Text, View, createEffect, createSignal, on, Scroll, useColorScheme, type Node } from "mantou-ui";
 import { LABELS, daysSince, longDate, shortDate, type Attachment, type Message } from "../data";
 import { homedir } from "node:os";
 import type { Remote } from "../mail/remote";
 import { SNOOZE_OPTIONS, type Mail } from "../state";
 import { C, hline, caption, small } from "./theme";
-import { Avatar, Chip, LabelChips, Kbd, AttachmentChip, linkParts } from "./common";
+import { Avatar, Chip, LabelChips, Kbd, AttachmentChip, TextButton, linkParts } from "./common";
 import { ReplyComposer } from "./Compose";
 import { Icon } from "./icons";
 
@@ -44,26 +44,76 @@ export function OpenMessage(props: { mail: Mail; remote?: Remote; message: Messa
         <Text style={small()}>{longDate(msg().date)}</Text>
       </View>
       <View style={{ gap: 14 }}>
-        <For each={msg().body}>
-          {(p) => (
-            <Text selectable style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>
-              <For each={linkParts(p)}>
-                {(part) =>
-                  part.url ? (
-                    <Text style={{ color: C.accentText, textDecoration: "underline", cursor: "pointer" }} onPress={() => props.remote?.openLink(part.url!)}>{part.text}</Text>
-                  ) : (
-                    part.text
-                  )
-                }
-              </For>
-            </Text>
-          )}
-        </For>
+        <Show when={msg().html} fallback={
+          <For each={msg().body}>
+            {(p) => (
+              <Text selectable style={{ fontSize: 14, lineHeight: 1.6, color: C.body }}>
+                <For each={linkParts(p)}>
+                  {(part) =>
+                    part.url ? (
+                      <Text style={{ color: C.accentText, textDecoration: "underline", cursor: "pointer" }} onPress={() => props.remote?.openLink(part.url!)}>{part.text}</Text>
+                    ) : (
+                      part.text
+                    )
+                  }
+                </For>
+              </Text>
+            )}
+          </For>
+        }>
+          <MailHtml html={msg().html!} remote={props.remote} />
+        </Show>
       </View>
       <Show when={msg().attachments?.length}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <For each={msg().attachments}>{(a) => <AttachmentChip attachment={a} onPress={() => open(a)} onSave={() => save(a)} />}</For>
         </View>
+      </Show>
+    </View>
+  );
+}
+
+/** An image or stylesheet a mail asks for on the web, when the person has allowed it: its bytes, or null. */
+async function fetchRemote(url: string): Promise<Uint8Array | null> {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    const type = r.headers.get("content-type") ?? "";
+    if (!r.ok || !/^(image\/|text\/css)/i.test(type)) return null;
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    return bytes.length > 5_000_000 ? null : bytes;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A message's HTML, drawn by Mantou (no scripts run). Pictures from the web are blocked until the person
+ * allows them (they tell the sender the mail was opened); pictures inside the message are already in it.
+ */
+function MailHtml(props: { html: string; remote?: Remote }) {
+  const scheme = useColorScheme();
+  const [allowed, setAllowed] = createSignal(false);
+  const [blocked, setBlocked] = createSignal(0);
+  const loader = (allow: boolean) => async (url: string) => {
+    if (!/^https?:/i.test(url)) return null;
+    if (allow) return fetchRemote(url);
+    setBlocked((n) => n + 1);
+    return null;
+  };
+  const link = (url: string) => {
+    if (/^(https?|mailto):/i.test(url)) props.remote?.openLink(url);
+  };
+  return (
+    <View style={{ gap: 10 }}>
+      <Show when={!allowed() && blocked() > 0}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 8, paddingBottom: 8, paddingLeft: 12, paddingRight: 8, borderRadius: 8, backgroundColor: C.faint }}>
+          <Text style={{ flexGrow: 1, flexShrink: 1, fontSize: 12, color: C.secondary }}>Pictures from the web are blocked, so the sender can't tell you opened this.</Text>
+          <TextButton label="Load pictures" onPress={() => setAllowed(true)} />
+        </View>
+      </Show>
+      {/* Asked once per address: allowing starts a new document, which asks again. */}
+      <Show when={allowed()} fallback={<Html html={props.html} colorScheme={scheme()} loadImage={loader(false)} onLink={link} style={{ width: "100%" }} />}>
+        <Html html={props.html} colorScheme={scheme()} loadImage={loader(true)} onLink={link} style={{ width: "100%" }} />
       </Show>
     </View>
   );
