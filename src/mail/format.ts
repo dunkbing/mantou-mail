@@ -3,7 +3,7 @@
 // no rich text yet, dunkbing/mantou#15), so formatting is written the way
 // people write it in plain text, a little Markdown, and sent as HTML too:
 // **bold**, *italic* or _italic_, `code`, [links](https://…), bare links,
-// "- " or "1. " lists, "> " quotes.
+// "- " or "1. " lists, "> " quotes. The composer's format bar writes these (`applyFormat`).
 import type { Contact, Message } from "../data";
 
 const who = (c: Contact) => (c.name && c.name !== c.email ? `${c.name} <${c.email}>` : c.email);
@@ -65,4 +65,48 @@ export function replyHtml(body: string, original?: Message): string {
   if (!original) return html;
   const quoted = original.body.map((p) => `<p>${escape(p).replace(/\n/g, "<br>")}</p>`).join("");
   return `${html}\n<div><p>${escape(attribution(original))}</p><blockquote style="${QUOTE_STYLE}">${quoted}</blockquote></div>`;
+}
+
+export type Format = "bold" | "italic" | "code" | "link" | "bullets" | "numbers" | "quote";
+export interface Edit {
+  text: string;
+  start: number;
+  end: number;
+}
+
+const WRAP: Record<"bold" | "italic" | "code", string> = { bold: "**", italic: "*", code: "`" };
+const PREFIX: Record<"bullets" | "numbers" | "quote", RegExp> = { bullets: /^[-*] /, numbers: /^\d+\. /, quote: /^> ?/ };
+
+/**
+ * The text after a formatting button or shortcut, written as the Markdown above, and where the selection goes.
+ * Pressing it again undoes it: wrapped text is unwrapped, lines that all have the prefix lose it.
+ */
+export function applyFormat(text: string, sel: { start: number; end: number }, kind: Format): Edit {
+  const { start, end } = sel;
+  if (kind === "bold" || kind === "italic" || kind === "code") {
+    const m = WRAP[kind];
+    const before = text.slice(Math.max(0, start - m.length), start);
+    const after = text.slice(end, end + m.length);
+    // "**bold**" selected with its markers, or just the word between them
+    if (before === m && after === m && (kind !== "italic" || text[start - 2] !== "*")) {
+      return { text: text.slice(0, start - m.length) + text.slice(start, end) + text.slice(end + m.length), start: start - m.length, end: end - m.length };
+    }
+    return { text: text.slice(0, start) + m + text.slice(start, end) + m + text.slice(end), start: start + m.length, end: end + m.length };
+  }
+  if (kind === "link") {
+    const label = text.slice(start, end);
+    const url = "https://";
+    const out = `${text.slice(0, start)}[${label}](${url})${text.slice(end)}`;
+    // a label already there: the address is what's left to type; else the label is
+    return label ? { text: out, start: start + label.length + 3, end: start + label.length + 3 + url.length } : { text: out, start: start + 1, end: start + 1 };
+  }
+  // lists and quotes work on whole lines
+  const from = text.lastIndexOf("\n", start - 1) + 1;
+  const nl = text.indexOf("\n", end);
+  const to = nl === -1 ? text.length : nl;
+  const lines = text.slice(from, to).split("\n");
+  const has = PREFIX[kind];
+  const off = lines.every((l) => has.test(l));
+  const done = lines.map((l, i) => (off ? l.replace(has, "") : kind === "bullets" ? `- ${l.replace(/^\d+\. |^[-*] /, "")}` : kind === "numbers" ? `${i + 1}. ${l.replace(/^\d+\. |^[-*] /, "")}` : `> ${l}`)).join("\n");
+  return { text: text.slice(0, from) + done + text.slice(to), start: from, end: from + done.length };
 }

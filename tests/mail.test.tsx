@@ -4,6 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
+import { toHtml } from "../src/mail/format";
 import { createMail, formatContacts, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../src/state";
 import { sampleMessages } from "../src/data";
 import { rowHeight } from "../src/ui/MessageList";
@@ -741,4 +742,28 @@ test("several conversations picked together (Shift: a range, Ctrl/⌘: one more)
   expect(ids.every((id) => mail.messages().find((m) => m.id === id)!.folder === "inbox")).toBe(true);
   mail.select(first); // a plain click is one again
   expect(mail.picked().size).toBe(0);
+});
+
+test("the format bar and ⌘B/⌘K write Markdown around the selection, and the text goes out as HTML too", () => {
+  const { h, mail } = app();
+  h.key("c");
+  h.type("jonas@acme.io");
+  h.key("Enter");
+  h.type("Hi");
+  h.key("Enter");
+  h.type("say hello now");
+  const body = inputs(h).at(-1)!;
+  body.setSelection(4, 9); // "hello"
+  h.press(text(h, "B"));
+  expect(mail.draft().body).toBe("say **hello** now");
+  expect(h.focused()).toBe(body); // typing goes on
+  h.press(text(h, "B")); // again: undone
+  expect(mail.draft().body).toBe("say hello now");
+  h.key("a", { primary: true });
+  h.press(text(h, "• List"));
+  expect(mail.draft().body).toBe("- say hello now");
+  body.setSelection(2, 5);
+  h.key("k", { primary: true });
+  expect(mail.draft().body).toBe("- [say](https://) hello now");
+  expect(toHtml(mail.draft().body.replace("https://", "https://a.b"))).toContain('<a href="https://a.b">say</a>');
 });

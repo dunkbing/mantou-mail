@@ -1,6 +1,7 @@
 // Writing mail: the reply composer under the reader, and the new-message composer.
 import { For, Input, Show, Text, View, createMemo, createSignal, onCleanup, onFileDrop, onKey, type Node } from "mantou-ui";
 import type { Remote } from "../mail/remote";
+import { applyFormat, type Format } from "../mail/format";
 import { Icon } from "./icons";
 import { QUICK_REPLIES, acceptRecipient, parseRecipients, sendLaterOptions, suggestRecipients, type Mail } from "../state";
 import { now } from "../data";
@@ -183,6 +184,7 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
   /** The address lines, open to change who it goes to. */
   const [editing, setEditing] = createSignal(false);
   let body: Node | undefined;
+  const [bodyFocus, setBodyFocus] = createSignal(false);
   const summary = () => {
     const d = m.draft(), names = (line: string | undefined) => parseRecipients(line ?? "", m.contacts()).ok.map((c) => c.name).join(", ");
     return [["To", names(d.to)], ["Cc", names(d.cc)], ["Bcc", names(d.bcc)]].filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join("  ·  ") || "No recipients yet";
@@ -221,6 +223,7 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
           )}
         </For>
       </View>
+      <FormatBar mail={m} body={() => body} focused={bodyFocus} />
       <Input
         ref={(n) => (body = n)}
         multiline
@@ -228,7 +231,8 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
         value={m.draft().body}
         placeholder="Write a reply"
         onChange={(body) => m.editDraft({ body })}
-        onFocus={() => setActiveLine(null)}
+        onFocus={() => (setActiveLine(null), setBodyFocus(true))}
+        onBlur={() => setBodyFocus(false)}
         onSubmit={() => m.send()}
         style={[field(), { height: 112, paddingTop: 10, paddingBottom: 10, paddingLeft: 12, paddingRight: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, lineHeight: 1.5 }]}
       />
@@ -247,6 +251,53 @@ export function ReplyComposer(props: { mail: Mail; remote?: Remote }) {
   );
 }
 
+const FORMATS: { kind: Format; label: string; hint: string; weight?: number }[] = [
+  { kind: "bold", label: "B", hint: "Bold", weight: 800 },
+  { kind: "italic", label: "I", hint: "Italic" },
+  { kind: "link", label: "Link", hint: "Link" },
+  { kind: "bullets", label: "• List", hint: "Bulleted list" },
+  { kind: "numbers", label: "1. List", hint: "Numbered list" },
+  { kind: "quote", label: "Quote", hint: "Quote" },
+  { kind: "code", label: "Code", hint: "Code" },
+];
+const SHORTCUTS: Record<string, Format> = { b: "bold", i: "italic", k: "link" };
+
+/**
+ * Formatting for the text field: buttons (and ⌘/Ctrl+B, I, K) that write the Markdown the message is sent as HTML from,
+ * around the selection. The field stays plain text (Mantou has no editable rich text), so what's written is what's sent.
+ */
+function FormatBar(props: { mail: Mail; body: () => Node | undefined; focused: () => boolean }) {
+  const apply = (kind: Format) => {
+    const n = props.body();
+    if (!n || n.released) return;
+    const text = props.mail.draft().body;
+    const e = applyFormat(text, n.selection() ?? { start: text.length, end: text.length }, kind);
+    props.mail.editDraft({ body: e.text });
+    n.setSelection(e.start, e.end);
+    n.focus(); // the press took the focus; give it back to keep typing
+  };
+  onKey((e) => {
+    const kind = SHORTCUTS[e.key.toLowerCase()];
+    if (e.type !== "keyDown" || !kind || !(e.ctrl || e.meta) || e.shift || !props.focused()) return;
+    apply(kind);
+    e.stopPropagation?.();
+  });
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+      <For each={FORMATS}>
+        {(f) => (
+          <View
+            style={{ height: 26, minWidth: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            onPress={() => apply(f.kind)}
+          >
+            <Text style={{ fontSize: 12, fontWeight: f.weight ?? 500, color: C.secondary }}>{f.label}</Text>
+          </View>
+        )}
+      </For>
+    </View>
+  );
+}
+
 /** A new message (or a saved draft), over the app: From, To, Subject, the text. */
 export function Composer(props: { mail: Mail; remote?: Remote }) {
   const m = props.mail;
@@ -255,6 +306,7 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
   let body: Node | undefined;
   let cc: Node | undefined;
   let bcc: Node | undefined;
+  const [bodyFocus, setBodyFocus] = createSignal(false);
   /** The Cc and Bcc lines: shown when the draft has copies, or on "Cc Bcc". */
   const [copies, setCopies] = createSignal(!!(m.draft().cc?.trim() || m.draft().bcc?.trim()));
   const label = (text: string) => <Text style={{ width: 64, flexShrink: 0, fontSize: 13, color: C.muted }}>{text}</Text>;
@@ -309,14 +361,19 @@ export function Composer(props: { mail: Mail; remote?: Remote }) {
           />
         </View>
         <View style={hline()} />
+        <View style={{ paddingLeft: 14, paddingRight: 14, paddingTop: 6, paddingBottom: 6 }}>
+          <FormatBar mail={m} body={() => body} focused={bodyFocus} />
+        </View>
+        <View style={hline()} />
         <Input
           ref={(n) => (body = n)}
           multiline
           autoFocus={!!m.draft().to}
           value={m.draft().body}
-          placeholder="Write your message: **bold**, *italic*, - lists and links go formatted"
+          placeholder="Write your message"
           onChange={(body) => m.editDraft({ body })}
-          onFocus={() => setActiveLine(null)}
+          onFocus={() => (setActiveLine(null), setBodyFocus(true))}
+          onBlur={() => setBodyFocus(false)}
           onSubmit={() => m.send()}
           style={[field(), { height: 280, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20, lineHeight: 1.5 }]}
         />
