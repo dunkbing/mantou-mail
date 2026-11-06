@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { Account, Message } from "../data";
 import type { ImapSettings, SmtpSettings } from "./providers";
 import type { OAuthProviderId } from "./oauth";
+import type { LogEntry, Proposal } from "../agent/proposals";
 
 export interface AccountConfig extends Account {
   imap: ImapSettings;
@@ -18,7 +19,7 @@ export interface AccountConfig extends Account {
   signature?: string;
 }
 
-const DATES = new Set(["date", "waitingSince"]);
+const DATES = new Set(["date", "waitingSince", "createdAt", "at"]);
 const revive = (k: string, v: unknown) => (DATES.has(k) && typeof v === "string" ? new Date(v) : v);
 
 export class Store {
@@ -36,6 +37,8 @@ export class Store {
       CREATE TABLE IF NOT EXISTS folders (account TEXT NOT NULL, path TEXT NOT NULL, uidvalidity INTEGER NOT NULL, PRIMARY KEY (account, path));
       CREATE TABLE IF NOT EXISTS pending (seq INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, op TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS windows (account TEXT NOT NULL, folder TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY (account, folder));
+      CREATE TABLE IF NOT EXISTS proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS action_log (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL);
     `);
   }
 
@@ -114,6 +117,35 @@ export class Store {
 
   setWindow(account: string, folder: string, size: number) {
     this.db.query("INSERT OR REPLACE INTO windows (account, folder, size) VALUES (?, ?, ?)").run(account, folder, size);
+  }
+
+  /** The agent's proposals, newest first (all, or one status). */
+  proposals(status?: Proposal["status"]): Proposal[] {
+    const rows = status
+      ? this.db.query<{ id: number; status: string; data: string }, [string]>("SELECT id, status, data FROM proposals WHERE status = ? ORDER BY id DESC").all(status)
+      : this.db.query<{ id: number; status: string; data: string }, []>("SELECT id, status, data FROM proposals ORDER BY id DESC").all();
+    return rows.map((r) => ({ ...JSON.parse(r.data, revive), id: r.id, status: r.status }));
+  }
+
+  addProposal(p: Omit<Proposal, "id" | "status" | "createdAt">, now: Date): Proposal {
+    const full = { ...p, status: "pending" as const, createdAt: now };
+    const id = Number(this.db.query("INSERT INTO proposals (status, data) VALUES (?, ?)").run(full.status, JSON.stringify(full)).lastInsertRowid);
+    return { ...full, id };
+  }
+
+  setProposalStatus(id: number, status: Proposal["status"]) {
+    const row = this.db.query<{ data: string }, [number]>("SELECT data FROM proposals WHERE id = ?").get(id);
+    if (!row) return;
+    this.db.query("UPDATE proposals SET status = ?, data = ? WHERE id = ?").run(status, JSON.stringify({ ...JSON.parse(row.data), status }), id);
+  }
+
+  /** The action log, newest first. */
+  log(limit = 200): LogEntry[] {
+    return this.db.query<{ id: number; data: string }, [number]>("SELECT id, data FROM action_log ORDER BY id DESC LIMIT ?").all(limit).map((r) => ({ ...JSON.parse(r.data, revive), id: r.id }));
+  }
+
+  addLog(e: Omit<LogEntry, "id">): void {
+    this.db.query("INSERT INTO action_log (data) VALUES (?)").run(JSON.stringify(e));
   }
 
   close() {
