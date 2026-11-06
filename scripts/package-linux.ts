@@ -2,7 +2,7 @@
 //   mantou-mail-<version>-linux-<arch>.tar.gz  the app, its icon and .desktop entry, and install.sh
 //                                             (into ~/.local, or PREFIX=/usr/local), with uninstall.sh
 //   mantou-mail_<version>_<arch>.deb          the same in /opt/mantou-mail, for apt and dpkg (needs dpkg-deb)
-// `mantou package` makes macOS bundles only (dunkbing/mantou#26), so this does the Linux part.
+// Workaround for dunkbing/mantou#81: `mantou package` makes macOS bundles only, so this does the Linux part.
 import { $ } from "bun";
 import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
