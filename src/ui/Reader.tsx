@@ -91,7 +91,10 @@ async function fetchRemote(url: string): Promise<Uint8Array | null> {
  * allows them (they tell the sender the mail was opened); pictures inside the message are already in it.
  */
 function MailHtml(props: { html: string; remote?: Remote }) {
-  const scheme = useColorScheme();
+  const system = useColorScheme();
+  // Most mail has no dark styles: its dark text needs a light page, so it gets one (a white card) unless it asks for dark.
+  const dark = () => system() === "dark" && /prefers-color-scheme/i.test(props.html);
+  const scheme = () => (dark() ? "dark" : "light");
   const [allowed, setAllowed] = createSignal(false);
   const [blocked, setBlocked] = createSignal(0);
   const loader = (allow: boolean) => async (url: string) => {
@@ -112,9 +115,11 @@ function MailHtml(props: { html: string; remote?: Remote }) {
         </View>
       </Show>
       {/* Asked once per address: allowing starts a new document, which asks again. */}
+      <View style={{ borderRadius: 8, overflow: "hidden", backgroundColor: dark() ? "transparent" : "#ffffff" }}>
       <Show when={allowed()} fallback={<Html html={props.html} colorScheme={scheme()} loadImage={loader(false)} onLink={link} style={{ width: "100%" }} />}>
         <Html html={props.html} colorScheme={scheme()} loadImage={loader(true)} onLink={link} style={{ width: "100%" }} />
       </Show>
+      </View>
     </View>
   );
 }
