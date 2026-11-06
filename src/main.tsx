@@ -9,6 +9,7 @@ import { osSecrets } from "./mail/secrets";
 import { Store } from "./mail/store";
 import { Blobs } from "./mail/blobs";
 import { join } from "node:path";
+import { createAsk } from "./agent/ask";
 import { createReplies } from "./agent/replies";
 import { createSummaries } from "./agent/summary";
 import { createTriage } from "./agent/triage";
@@ -30,5 +31,6 @@ const consent = async () =>
 const triage = createTriage(mail, remote.store, { confirm: consent });
 const summaries = createSummaries(remote.store, { confirm: consent });
 const replies = createReplies({ confirm: consent });
+const ask = createAsk(mail, { confirm: consent });
 
-run(() => <App mail={mail} remote={remote} triage={triage} summaries={summaries} replies={replies} />, { title: "Mantou Mail", width: 1200, height: 760, minWidth: 980, minHeight: 600, titleBar: "overlay" });
+run(() => <App mail={mail} remote={remote} triage={triage} summaries={summaries} replies={replies} ask={ask} />, { title: "Mantou Mail", width: 1200, height: 760, minWidth: 980, minHeight: 600, titleBar: "overlay" });

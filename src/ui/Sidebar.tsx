@@ -83,6 +83,7 @@ export function Sidebar(props: { mail: Mail; remote?: Remote; searchRef: (n: Nod
         <Text style={{ fontSize: 11, fontWeight: 600, color: "#c7d2fe" }}>C</Text>
       </View>
       <SearchField mail={m} ref={props.searchRef} />
+      <SidebarItem mail={m} mailbox={{ kind: "ask" }} name="Ask" icon="search" />
       <SidebarItem mail={m} mailbox={{ kind: "queue" }} name="Queue" icon="check" count={m.proposals().length} />
       <SidebarItem mail={m} mailbox={{ kind: "all" }} name="All inboxes" icon="inboxes" count={m.unread({ kind: "all" })} />
       <For each={m.accounts()}>

@@ -46,12 +46,15 @@ export const TOOLS: ToolSpec[] = [
   },
 ];
 
+/** The tools a context offers: without a way to record proposals (a question being answered), `propose` isn't there at all. */
+export const toolsFor = (ctx: ToolContext): ToolSpec[] => TOOLS.filter((t) => t.name !== "propose" || ctx.addProposal);
+
 export interface ToolContext {
   messages: () => Message[];
   /** Records a proposal as pending and returns it. The only write the tools have. */
-  addProposal: (p: Pick<Proposal, "kind" | "ids" | "reason" | "value">) => Proposal;
+  addProposal?: (p: Pick<Proposal, "kind" | "ids" | "reason" | "value">) => Proposal;
   /** Pending proposals, to avoid proposing the same thing twice. */
-  pending: () => Proposal[];
+  pending?: () => Proposal[];
 }
 
 export interface ToolResult {
@@ -114,6 +117,7 @@ export function callTool(ctx: ToolContext, name: string, args: unknown): ToolRes
       return { text: untrusted(text) };
     }
     case "propose": {
+      if (!ctx.addProposal || !ctx.pending) return err("proposing isn't available here");
       const kind = args.kind;
       if (typeof kind !== "string" || !(PROPOSAL_KINDS as readonly string[]).includes(kind)) return err(`kind must be one of: ${PROPOSAL_KINDS.join(", ")}`);
       if (!Array.isArray(args.ids) || !args.ids.length || args.ids.length > MAX_IDS || !args.ids.every((i) => Number.isInteger(i))) return err(`ids must be 1 to ${MAX_IDS} message ids`);

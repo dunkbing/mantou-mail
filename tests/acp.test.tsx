@@ -5,6 +5,7 @@ import { mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "mantou-ui/headless";
 import { App } from "../src/App";
 import { createTriage } from "../src/agent/triage";
+import { createAsk, readAnswer } from "../src/agent/ask";
 import { cleanReplies, createReplies, replyPrompt } from "../src/agent/replies";
 import { cleanSummary, createSummaries, isLong, summaryPrompt, threadVersion } from "../src/agent/summary";
 import { createMail, type Mail } from "../src/state";
@@ -291,4 +292,48 @@ test("suggested replies: three plain replies, no tools, shown as chips that fill
   h.press(text("Which hotel?")!);
   h.step();
   expect(mail.draft().body).toBe("Which hotel?");
+});
+
+test("Ask your inbox: the agent can read but not propose, and only real visible messages become sources", async () => {
+  const list = sampleMessages();
+  const real = list.find((m) => m.folder === "inbox")!;
+  const hidden: Message = { ...real, id: 5000, subject: "Your verification code", body: ["Your verification code is 123456"] };
+  const a = readAnswer("q", `It is at 9:40 [#${real.id}]. Also [#${real.id}, #5000] and [#99999].`, [...list, hidden]);
+  expect(a.sources).toEqual([real]); // once, and not the hidden or made-up ids
+  expect(a.text).toBe("It is at 9:40. Also and.");
+
+  const h = new HeadlessCore({ width: 1200, height: 760 });
+  open.push(h);
+  let tools: string[] = [];
+  let proposeError = false;
+  const f = fakeAgent(async (ag, server) => {
+    const l = await fetch(server.url, { method: "POST", headers: { "content-type": "application/json", authorization: server.headers[0].value }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) }).then(json);
+    tools = l.result.tools.map((t) => t.name).sort();
+    proposeError = !!(await rpc(server, "propose", { kind: "archive", ids: [real.id], reason: "x" }).then(json)).result.isError;
+    await say(ag, `Mum asked about Sunday lunch [#${real.id}].`);
+  });
+  let mail!: Mail;
+  const asking = (() => {
+    const holder: { v?: ReturnType<typeof createAsk> } = {};
+    return holder;
+  })();
+  mount(h.ui, () => {
+    mail = createMail(list);
+    asking.v = createAsk(mail, { connect: f.app });
+    return <App mail={mail} ask={asking.v} />;
+  });
+  h.step();
+  mail.open({ kind: "ask" });
+  h.step();
+  await asking.v!.run("Who asked about lunch?");
+  h.step();
+  expect(tools).toEqual(["read_thread", "search_mail"]);
+  expect(proposeError).toBe(true);
+  expect(asking.v!.answer()?.sources.map((s) => s.id)).toEqual([real.id]);
+  const text = (t: string): Node | undefined => [...h.ui.nodes.values()].find((n) => n.isText && n.textContent === t);
+  expect(text("Mum asked about Sunday lunch.")).toBeDefined();
+  h.press(text(`${real.from.name} · ${real.subject}`)!);
+  h.step();
+  expect(mail.selected()?.id).toBe(real.id);
+  expect(mail.mailbox()).toEqual({ kind: "all" });
 });

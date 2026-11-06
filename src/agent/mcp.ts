@@ -1,7 +1,7 @@
 // The agent's tools as an MCP server (streamable HTTP, JSON replies) inside the app, for the agent to connect
 // to: it needs no process of its own and reads the same messages the app shows. It listens on the loopback
 // interface only, wants a random bearer token, and checks the Host header (so a web page can't reach it).
-import { TOOLS, callTool, type ToolContext } from "./tools";
+import { toolsFor, callTool, type ToolContext } from "./tools";
 
 export const SERVER_NAME = "mantou-mail";
 
@@ -33,7 +33,7 @@ function handle(ctx: ToolContext, msg: unknown): Json | undefined {
       return reply({ protocolVersion: asked, capabilities: { tools: {} }, serverInfo: { name: SERVER_NAME, version: "1" } });
     }
     case "ping": return reply({});
-    case "tools/list": return reply({ tools: TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.input as unknown as Json })) });
+    case "tools/list": return reply({ tools: toolsFor(ctx).map((t) => ({ name: t.name, description: t.description, inputSchema: t.input as unknown as Json })) });
     case "tools/call": {
       if (!isRecord(rpc.params) || typeof rpc.params.name !== "string") return fail(-32602, "name is required");
       const r = callTool(ctx, rpc.params.name, rpc.params.arguments ?? {});

@@ -15,6 +15,7 @@ export type Mailbox =
   | { kind: "starred" }
   | { kind: "label"; id: string }
   | { kind: "queue" }
+  | { kind: "ask" }
   | { kind: "search"; query: string };
 
 /** Whether two copies of a message say the same (so the old one can stay). */
@@ -38,6 +39,7 @@ export function mailboxName(m: Mailbox, accounts: Account[] = SAMPLE_ACCOUNTS): 
     case "starred": return "Starred";
     case "label": return LABELS.find((l) => l.id === m.id)?.name ?? m.id;
     case "queue": return "Queue";
+    case "ask": return "Ask";
     case "search": return m.query ? `Results for “${m.query}”` : "Search";
   }
 }
@@ -57,7 +59,8 @@ export function inMailbox(msg: Message, m: Mailbox): boolean {
     case "folder": return msg.folder === m.folder;
     case "starred": return msg.starred && msg.folder !== "trash";
     case "label": return msg.labels.includes(m.id) && msg.folder !== "trash";
-    case "queue": return false;
+    case "queue":
+    case "ask": return false;
     case "search": return msg.folder !== "trash" && matches(msg, m.query);
   }
 }
@@ -412,6 +415,15 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
       setSelectedId(null);
     });
   }
+  /** Opens a message wherever it is (its folder, or the inbox) and selects it: what a citation does. */
+  function show(id: number) {
+    const msg = messages().find((x) => x.id === id);
+    if (!msg) return;
+    batch(() => {
+      open(msg.folder === "inbox" ? { kind: "all" } : { kind: "folder", folder: msg.folder });
+      select(id);
+    });
+  }
   function setQuery(query: string) {
     batch(() => {
       setMailbox({ kind: "search", query });
@@ -755,6 +767,7 @@ export function createMail(initial: Message[] = sampleMessages(), options: MailO
     // Search: the search field's focus and text drive these.
     query,
     setQuery,
+    show,
     /** The search field got the focus: results replace the mailbox (empty until something is typed). */
     startSearch() {
       batch(() => {

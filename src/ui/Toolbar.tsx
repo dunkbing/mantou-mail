@@ -50,7 +50,7 @@ export function Toolbar(props: { mail: Mail }) {
         <TabButton mail={m} tab="other" name="Other" />
       </Show>
       <View style={{ flexGrow: 1 }} />
-      <Show when={m.mailbox().kind !== "queue"}>
+      <Show when={m.mailbox().kind !== "queue" && m.mailbox().kind !== "ask"}>
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Show
           when={filed()}

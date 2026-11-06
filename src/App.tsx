@@ -10,6 +10,8 @@ import { MessageList } from "./ui/MessageList";
 import type { Replies } from "./agent/replies";
 import type { Summaries } from "./agent/summary";
 import type { Triage } from "./agent/triage";
+import type { Ask } from "./agent/ask";
+import { AskView } from "./ui/Ask";
 import { Queue } from "./ui/Queue";
 import { Reader } from "./ui/Reader";
 import { Composer } from "./ui/Compose";
@@ -20,7 +22,7 @@ import type { Remote } from "./mail/remote";
 import { APP_MENU, type Command } from "./ui/menu";
 import { PopupHost, popupOpen } from "./ui/PopupMenu";
 
-export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summaries?: Summaries; replies?: Replies }) {
+export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summaries?: Summaries; ask?: Ask; replies?: Replies }) {
   const m = props.mail ?? createMail();
   const ui = useUi();
   const [help, setHelp] = createSignal(false);
@@ -143,8 +145,8 @@ export function App(props: { mail?: Mail; remote?: Remote; triage?: Triage; summ
         {/* flexBasis 0: the row's height comes from the window, not from what's scrolled inside it. */}
         <View style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, flexDirection: "row" }}>
           <Show
-            when={m.mailbox().kind !== "queue"}
-            fallback={<Queue mail={m} triage={props.triage} />}
+            when={m.mailbox().kind !== "queue" && m.mailbox().kind !== "ask"}
+            fallback={m.mailbox().kind === "ask" ? <AskView mail={m} ask={props.ask} /> : <Queue mail={m} triage={props.triage} />}
           >
             <MessageList mail={m} remote={props.remote} onCommand={runCommand} />
             <View style={vline()} />
